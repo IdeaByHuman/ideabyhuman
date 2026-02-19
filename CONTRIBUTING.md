@@ -4,7 +4,7 @@ Team of 3, open collaboration — everyone can push to main. This doc clarifies 
 
 ## Ownership Areas
 
-### Frontend (Friend's name TBD)
+### Frontend (Dan)
 
 Primary workspace:
 
