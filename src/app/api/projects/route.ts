@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * GET /api/projects — List approved projects (public)
@@ -64,7 +65,10 @@ export async function POST(request: NextRequest) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  const { data, error } = await supabase
+  // Use admin client for insert to bypass RLS — auth is already verified above
+  const adminClient = createAdminClient()
+
+  const { data, error } = await adminClient
     .from('projects')
     .insert({
       ...body,
