@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+type UserProfile = { role: 'creator' | 'reviewer' | 'admin' }
+
 /**
  * GET /api/admin/reviews — List pending submissions (reviewer/admin only)
  */
@@ -13,17 +15,19 @@ export async function GET(request: NextRequest) {
   }
 
   // Check user role
-  const { data: profile } = await supabase
+  const { data } = await supabase
     .from('users')
     .select('role')
     .eq('id', user.id)
     .single()
 
-  if (!profile || !(profile.role === 'reviewer' || profile.role === 'admin')) {
+  const profile = data as UserProfile | null
+
+  if (!profile || (profile.role !== 'reviewer' && profile.role !== 'admin')) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const { data, error } = await supabase
+  const { data: projects, error } = await supabase
     .from('projects')
     .select('*, categories(name, slug)')
     .eq('status', 'pending')
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ pending: data })
+  return NextResponse.json({ pending: projects })
 }
 
 /**
@@ -47,13 +51,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
+  const { data } = await supabase
     .from('users')
     .select('role')
     .eq('id', user.id)
     .single()
 
-  if (!profile || !(profile.role === 'reviewer' || profile.role === 'admin')) {
+  const profile = data as UserProfile | null
+
+  if (!profile || (profile.role !== 'reviewer' && profile.role !== 'admin')) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
