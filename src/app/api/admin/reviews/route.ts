@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['reviewer', 'admin'].includes(profile.role)) {
+  if (!profile || !(profile.role === 'reviewer' || profile.role === 'admin')) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['reviewer', 'admin'].includes(profile.role)) {
+  if (!profile || !(profile.role === 'reviewer' || profile.role === 'admin')) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
