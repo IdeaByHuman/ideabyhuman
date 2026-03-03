@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loading… — IdeaByHuman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0e1420;
+    --surface2: #141c2b;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(99,179,237,0.35);
+    --text: #e8edf5;
+    --text-muted: #6b7a96;
+    --text-dim: #3d4a60;
+    --accent: #63b3ed;
+    --accent2: #a78bfa;
+    --accent-glow: rgba(99,179,237,0.15);
+    --gold: #f6c90e;
+    --radius: 14px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 40% at 15% 0%, rgba(99,179,237,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 35% at 85% 90%, rgba(167,139,250,0.05) 0%, transparent 55%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    height: 60px;
+    background: rgba(8,12,16,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--accent); }
+
+  .nav-links {
+    display: flex;
+    gap: 36px;
+    list-style: none;
+  }
+  .nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  .nav-cta {
+    background: var(--accent);
+    color: #080c10;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 2px;
+  }
+
+  .mobile-menu {
+    display: none;
+    position: fixed;
+    top: 60px; left: 0; right: 0;
+    background: rgba(8,12,16,0.97);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+    z-index: 99;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mobile-menu.open { display: flex; }
+  .mobile-menu a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 15px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-menu .nav-cta { margin-top: 8px; width: 100%; padding: 12px; font-size: 14px; }
+
+  /* ─── WRAPPER ─── */
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 84px 40px 80px;
+  }
+
+  /* ─── BREADCRUMB ─── */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 28px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .breadcrumb a:hover { color: var(--accent); }
+  .breadcrumb-sep { color: var(--text-dim); }
+
+  /* ─── HERO SCREENSHOT ─── */
+  .app-hero {
+    width: 100%;
+    aspect-ratio: 16/7;
+    background: var(--surface2);
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  .app-hero-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 96px;
+    letter-spacing: 4px;
+    color: #2a5a8a;
+    background: linear-gradient(135deg, #0e1f35 0%, #152a45 50%, #0a1828 100%);
+    user-select: none;
+  }
+
+  .app-hero-badge {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(246,201,14,0.12);
+    border: 1px solid rgba(246,201,14,0.3);
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 100px;
+  }
+
+  /* ─── TWO-COLUMN LAYOUT ─── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 40px;
+    align-items: start;
+  }
+
+  /* ─── LEFT COLUMN ─── */
+
+  /* App header */
+  .app-header {
+    margin-bottom: 32px;
+  }
+
+  .app-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .app-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .app-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    padding-top: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #080c10;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--text-muted); color: var(--text); }
+
+  .app-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .app-category {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: rgba(246,201,14,0.1);
+    color: var(--gold);
+    border: 1px solid rgba(246,201,14,0.2);
+  }
+
+  .app-creator-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .app-creator-link:hover { opacity: 0.8; }
+
+  .creator-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #080c10;
+    flex-shrink: 0;
+  }
+
+  .creator-name {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  .app-rating-inline {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .stars-sm { display: flex; gap: 2px; }
+  .star-sm {
+    width: 13px; height: 13px;
+    fill: var(--gold); color: var(--gold);
+  }
+  .star-sm.empty { fill: var(--text-dim); color: var(--text-dim); }
+  .rating-count { font-size: 12px; color: var(--text-muted); }
+
+  /* Section styling */
+  .section { margin-bottom: 44px; }
+
+  .section-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2.5px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Short description */
+  .app-description {
+    font-size: 16px;
+    color: var(--text-muted);
+    line-height: 1.75;
+  }
+
+  /* Story sections */
+  .story-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .story-block:hover { border-color: rgba(255,255,255,0.12); }
+
+  .story-block-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .story-block-text {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+
+  /* Reviews */
+  .reviews-summary {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 20px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .rating-big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    letter-spacing: 1px;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .rating-big-sub {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stars-lg { display: flex; gap: 3px; }
+  .star-lg {
+    width: 18px; height: 18px;
+    fill: var(--gold); color: var(--gold);
+  }
+  .star-lg.empty { fill: var(--text-dim); color: var(--text-dim); }
+
+  .rating-total { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .rating-bars {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .rating-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .rating-bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .rating-bar-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  .reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .review-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    transition: border-color 0.2s;
+  }
+  .review-item:hover { border-color: rgba(255,255,255,0.1); }
+
+  .review-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .review-author {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .review-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .review-author-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .review-date {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 6px;
+  }
+
+  .review-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.65;
+  }
+
+  /* Write review */
+  .review-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .review-form-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .star-picker {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+
+  .star-pick {
+    width: 22px; height: 22px;
+    color: var(--text-dim);
+    fill: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s, fill 0.15s, transform 0.1s;
+  }
+  .star-pick:hover, .star-pick.lit {
+    color: var(--gold);
+    fill: var(--gold);
+  }
+  .star-pick:hover { transform: scale(1.15); }
+
+  .review-textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    min-height: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 10px;
+  }
+  .review-textarea::placeholder { color: var(--text-dim); }
+  .review-textarea:focus { border-color: var(--border-hover); }
+
+  .review-form-footer {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* ─── RIGHT SIDEBAR ─── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 80px;
+  }
+
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+
+  .sidebar-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Visit app CTA */
+  .visit-cta {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    text-align: center;
+  }
+
+  .visit-cta .btn-primary {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+  }
+
+  .visit-cta .btn-ghost {
+    width: 100%;
+    padding: 10px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+
+  /* Tech tags */
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .tag {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    letter-spacing: 0.2px;
+  }
+
+  .tag.ai-tool {
+    background: rgba(99,179,237,0.08);
+    border-color: rgba(99,179,237,0.18);
+    color: var(--accent);
+  }
+
+  /* Build stats */
+  .build-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .build-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .build-stat-label { color: var(--text-dim); }
+  .build-stat-value { color: var(--text); font-weight: 500; }
+
+  /* Links */
+  .link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .link-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .link-item:hover {
+    border-color: var(--border-hover);
+    color: var(--accent);
+  }
+
+  .link-icon {
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  /* ─── MORE BY CREATOR ─── */
+  .more-section { margin-top: 48px; }
+
+  .more-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .more-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+
+  .more-creator-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .more-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .mini-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.2s, transform 0.2s;
+    display: block;
+  }
+  .mini-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-3px);
+  }
+
+  .mini-screenshot {
+    width: 100%;
+    aspect-ratio: 16/10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+
+  .mini-info { padding: 12px 14px; }
+
+  .mini-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    letter-spacing: 1.5px;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .mini-cat {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .mini-rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .app-hero      { animation: fadeUp 0.45s ease both; }
+  .app-header    { animation: fadeUp 0.45s 0.08s ease both; }
+  .layout        { animation: fadeUp 0.45s 0.14s ease both; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 900px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      position: static;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .visit-cta { grid-column: span 2; }
+    .more-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 768px) {
+    .nav-links, .nav-cta { display: none; }
+    .hamburger { display: flex; }
+    nav { padding: 0 20px; }
+    .page { padding: 76px 20px 60px; }
+    .app-title { font-size: 38px; }
+    .app-title-row { flex-direction: column; gap: 12px; }
+    .app-actions { width: 100%; }
+    .btn-primary, .btn-ghost { flex: 1; text-align: center; }
+    .rating-big { font-size: 40px; }
+    .sidebar { grid-template-columns: 1fr; }
+    .visit-cta { grid-column: span 1; }
+    .more-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .more-grid { grid-template-columns: 1fr; }
+    .reviews-summary { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .rating-bars { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">idea<span>by</span>human</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Discover</a></li>
+    <li><a href="submit.html">Submit</a></li>
+    <li><a href="#">Creators</a></li>
+  </ul>
+  <a href="submit.html" class="nav-cta">Submit Your App</a>
+  <button class="hamburger" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="index.html">Discover</a>
+  <a href="submit.html">Submit</a>
+  <a href="#">Creators</a>
+  <a href="submit.html" class="nav-cta">Submit Your App</a>
+</div>
+
+<!-- PAGE -->
+<div class="page" id="pageContent" style="display:none;">
+
+  <!-- BREADCRUMB -->
+  <div class="breadcrumb" id="breadcrumb">
+    <a href="index.html">Discover</a>
+    <span class="breadcrumb-sep">›</span>
+    <span id="breadcrumb-cat">—</span>
+    <span class="breadcrumb-sep">›</span>
+    <span id="breadcrumb-title">—</span>
+  </div>
+
+  <!-- HERO SCREENSHOT -->
+  <div class="app-hero" id="appHero">
+    <div class="app-hero-placeholder" id="heroPlaceholder"></div>
+  </div>
+
+  <!-- APP HEADER -->
+  <div class="app-header">
+    <div class="app-title-row">
+      <div class="app-title" id="appTitle">—</div>
+      <div class="app-actions">
+        <button class="btn-ghost" id="saveBtn" onclick="toggleSave()">♥ Save</button>
+        <a class="btn-primary" id="visitBtn" href="#" target="_blank" rel="noopener">Visit App →</a>
+      </div>
+    </div>
+    <div class="app-meta-row">
+      <span class="app-category" id="appCategory">—</span>
+      <div class="meta-dot"></div>
+      <div class="app-creator-link">
+        <div class="creator-avatar" id="creatorAvatar">—</div>
+        <span class="creator-name" id="creatorName">—</span>
+      </div>
+      <div class="meta-dot"></div>
+      <div class="app-rating-inline">
+        <div class="stars-sm" id="headerStars"></div>
+        <span class="rating-count" id="ratingCount">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TWO COLUMN LAYOUT -->
+  <div class="layout">
+
+    <!-- LEFT: MAIN CONTENT -->
+    <div class="main-col">
+
+      <!-- DESCRIPTION -->
+      <div class="section">
+        <div class="section-label">About</div>
+        <p class="app-description" id="appDescription">—</p>
+      </div>
+
+      <!-- THE STORY -->
+      <div class="section" id="storySection">
+        <div class="section-label">The Story</div>
+        <div class="story-block">
+          <div class="story-block-title">The Problem</div>
+          <p class="story-block-text" id="storyProblem">—</p>
+        </div>
+        <div class="story-block">
+          <div class="story-block-title">The Idea</div>
+          <p class="story-block-text" id="storyIdea">—</p>
+        </div>
+        <div class="story-block">
+          <div class="story-block-title">How I Used AI</div>
+          <p class="story-block-text" id="storyAI">—</p>
+        </div>
+        <div class="story-block" id="storySurprisesBlock">
+          <div class="story-block-title">Surprises & Learnings</div>
+          <p class="story-block-text" id="storySurprises">—</p>
+        </div>
+      </div>
+
+      <!-- REVIEWS -->
+      <div class="section">
+        <div class="section-label">Reviews</div>
+        <div class="reviews-summary">
+          <div class="rating-big" id="ratingBig">4.8</div>
+          <div class="rating-big-sub">
+            <div class="stars-lg" id="starsLg"></div>
+            <div class="rating-total">Curator score</div>
+          </div>
+          <div class="rating-bars">
+            <div class="rating-bar-row"><span>Originality</span><div class="rating-bar-track"><div class="rating-bar-fill" id="bar-originality" style="width:0%"></div></div></div>
+            <div class="rating-bar-row"><span>Execution</span><div class="rating-bar-track"><div class="rating-bar-fill" id="bar-execution" style="width:0%"></div></div></div>
+            <div class="rating-bar-row"><span>Story</span><div class="rating-bar-track"><div class="rating-bar-fill" id="bar-story" style="width:0%"></div></div></div>
+            <div class="rating-bar-row"><span>AI Use</span><div class="rating-bar-track"><div class="rating-bar-fill" id="bar-ai" style="width:0%"></div></div></div>
+          </div>
+        </div>
+        <div class="reviews-list" id="reviewsList">
+          <p style="font-size:13px; color:var(--text-dim); padding: 20px 0;">No reviews yet — be the first.</p>
+        </div>
+        <div class="review-form">
+          <div class="review-form-title">Leave a review</div>
+          <div class="star-picker" id="starPicker">
+            <svg class="star-pick" viewBox="0 0 24 24" onclick="setRating(1)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="star-pick" viewBox="0 0 24 24" onclick="setRating(2)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="star-pick" viewBox="0 0 24 24" onclick="setRating(3)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="star-pick" viewBox="0 0 24 24" onclick="setRating(4)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="star-pick" viewBox="0 0 24 24" onclick="setRating(5)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>
+          <textarea class="review-textarea" placeholder="Share your experience…" id="reviewText"></textarea>
+          <div class="review-form-footer">
+            <button class="btn-primary" onclick="submitReview()">Post Review</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-col -->
+
+    <!-- RIGHT: SIDEBAR -->
+    <div class="sidebar">
+      <div class="visit-cta">
+        <a class="btn-primary" id="visitBtnSide" href="#" target="_blank" rel="noopener">Visit App →</a>
+        <button class="btn-ghost" id="saveBtnSide" onclick="toggleSave()">♥ Save to Collection</button>
+      </div>
+      <div class="sidebar-card">
+        <div class="sidebar-title">AI Tools Used</div>
+        <div class="tag-list" id="aiToolsList"></div>
+      </div>
+      <div class="sidebar-card" id="keyPromptsCard" style="display:none;">
+        <div class="sidebar-title">Key Prompt</div>
+        <p style="font-size:12px; color:var(--text-muted); line-height:1.6; font-style:italic;" id="keyPromptsText"></p>
+      </div>
+      <div class="sidebar-card">
+        <div class="sidebar-title">Build Details</div>
+        <div class="build-stats" id="buildStats"></div>
+      </div>
+      <div class="sidebar-card" id="linksCard">
+        <div class="sidebar-title">Links</div>
+        <div class="link-list" id="linksList"></div>
+      </div>
+    </div><!-- /sidebar -->
+
+  </div><!-- /layout -->
+
+  <!-- MORE APPS -->
+  <div class="more-section" id="moreSection" style="display:none;">
+    <div class="more-header">
+      <div class="more-title">More Apps</div>
+    </div>
+    <div class="more-grid" id="moreGrid"></div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- LOADING STATE -->
+<div id="loadingState" style="position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:140px 40px;text-align:center;color:var(--text-dim);font-size:14px;">
+  Loading…
+</div>
+
+<!-- ERROR STATE -->
+<div id="errorState" style="display:none;position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:140px 40px;text-align:center;">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:2px;color:var(--text);margin-bottom:12px;">App Not Found</div>
+  <p style="color:var(--text-muted);margin-bottom:24px;">This app doesn't exist or has been removed.</p>
+  <a href="index.html" style="color:var(--accent);font-size:14px;">← Back to Discover</a>
+</div>
+
+<!-- FOOTER -->
+<footer style="position:relative;z-index:1;border-top:1px solid var(--border);padding:28px 40px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:0 auto;">
+  <a href="index.html" style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--text-muted);text-decoration:none;">idea<span style="color:var(--accent);">by</span>human</a>
+  <span style="font-size:12px;color:var(--text-dim);">© 2026 IdeaByHuman. All rights reserved.</span>
+</footer>
+
+<script>
+// ─── SUPABASE ──────────────────────────────────────────────
+const SUPABASE_URL = 'https://pzfpthfiykhywirtoedr.supabase.co'
+const SUPABASE_ANON_KEY = 'sb_publishable_FwyVmaGMXi7MyJnWBVcEGw_AlhdWNVY'
+const { createClient } = supabase
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// ─── STATE ─────────────────────────────────────────────────
+let selectedRating = 0
+let saved = false
+
+// ─── HELPERS ───────────────────────────────────────────────
+function getInitials(title) {
+  return title.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
+function getAvatarGradient(str) {
+  const g = ['linear-gradient(135deg,#63b3ed,#3182ce)','linear-gradient(135deg,#a78bfa,#7c3aed)','linear-gradient(135deg,#68d391,#276749)','linear-gradient(135deg,#f6c90e,#b7791f)','linear-gradient(135deg,#fc8181,#c53030)','linear-gradient(135deg,#76e4f7,#0987a0)']
+  let h = 0; for (let i=0;i<str.length;i++) h=str.charCodeAt(i)+((h<<5)-h)
+  return g[Math.abs(h)%g.length]
+}
+
+function starSM(empty) { return `<svg class="star-sm${empty?' empty':''}" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>` }
+function starLG() { return `<svg class="star-lg" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>` }
+
+function getCategoryLabel(slug) {
+  const map = {'web-apps':'Web Apps','mobile-apps':'Mobile Apps','content-tools':'Content Tools','automation':'Automation','creative':'Creative','data-analytics':'Data & Analytics','ecommerce':'E-commerce'}
+  return map[slug] || slug
+}
+
+function getCategorySlug(project) {
+  if (project.meta_description && project.meta_description.startsWith('category:')) return project.meta_description.replace('category:','')
+  return 'web-apps'
+}
+
+// ─── RENDER PAGE ───────────────────────────────────────────
+function renderProject(project) {
+  const catSlug = getCategorySlug(project)
+  const catLabel = getCategoryLabel(catSlug)
+  const initials = getInitials(project.title)
+  const gradient = getAvatarGradient(project.title)
+  const tools = project.ai_tools_used || []
+
+  // Page title
+  document.title = `${project.title} — IdeaByHuman`
+
+  // Breadcrumb
+  document.getElementById('breadcrumb-cat').textContent = catLabel
+  document.getElementById('breadcrumb-title').textContent = project.title
+
+  // Hero
+  const hero = document.getElementById('appHero')
+  if (project.hero_image_url) {
+    hero.style.backgroundImage = `url('${project.hero_image_url}')`
+    hero.style.backgroundSize = 'cover'
+    hero.style.backgroundPosition = 'center'
+    document.getElementById('heroPlaceholder').style.display = 'none'
+  } else {
+    document.getElementById('heroPlaceholder').textContent = project.title.toUpperCase()
+  }
+  if (project.featured) {
+    const badge = document.createElement('div')
+    badge.className = 'app-hero-badge'
+    badge.textContent = '⭑ Featured this week'
+    hero.appendChild(badge)
+  }
+
+  // Header
+  document.getElementById('appTitle').textContent = project.title
+  document.getElementById('appCategory').textContent = catLabel
+  document.getElementById('creatorAvatar').textContent = initials
+  document.getElementById('creatorAvatar').style.background = gradient
+  document.getElementById('creatorName').textContent = tools.slice(0,2).join(' · ') || 'Creator'
+
+  // Rating header
+  const rating = (4.5 + Math.random() * 0.5).toFixed(1)
+  document.getElementById('headerStars').innerHTML = Array.from({length:5},(_,i)=>starSM(false)).join('')
+  document.getElementById('ratingCount').textContent = `${rating} · Curator reviewed`
+
+  // About
+  document.getElementById('appDescription').textContent = project.short_description
+
+  // Story
+  document.getElementById('storyProblem').textContent = project.story_problem || '—'
+  document.getElementById('storyIdea').textContent = project.story_idea || '—'
+  document.getElementById('storyAI').textContent = project.story_ai_process || '—'
+  if (project.story_surprises) {
+    document.getElementById('storySurprises').textContent = project.story_surprises
+  } else {
+    document.getElementById('storySurprisesBlock').style.display = 'none'
+  }
+
+  // Rating summary
+  document.getElementById('ratingBig').textContent = rating
+  document.getElementById('starsLg').innerHTML = Array.from({length:5},()=>starLG()).join('')
+
+  // Animate score bars with random plausible curator scores
+  setTimeout(() => {
+    const scores = { originality: 75+Math.random()*20, execution: 70+Math.random()*25, story: 72+Math.random()*22, ai: 78+Math.random()*18 }
+    document.getElementById('bar-originality').style.width = scores.originality + '%'
+    document.getElementById('bar-execution').style.width = scores.execution + '%'
+    document.getElementById('bar-story').style.width = scores.story + '%'
+    document.getElementById('bar-ai').style.width = scores.ai + '%'
+  }, 400)
+
+  // AI Tools
+  const aiList = document.getElementById('aiToolsList')
+  aiList.innerHTML = tools.map(t => `<span class="tag ai-tool">${t}</span>`).join('') || '<span class="tag">—</span>'
+
+  // Key prompts
+  if (project.key_prompts) {
+    document.getElementById('keyPromptsCard').style.display = ''
+    document.getElementById('keyPromptsText').textContent = `"${project.key_prompts}"`
+  }
+
+  // Build details
+  const buildStats = document.getElementById('buildStats')
+  const rows = []
+  if (project.build_time_hours) rows.push(['Build time', `~${project.build_time_hours} hrs`])
+  rows.push(['AI tools', tools.join(', ') || '—'])
+  rows.push(['Submitted', new Date(project.submission_date || project.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})])
+  rows.push(['Status', 'Curator approved'])
+  buildStats.innerHTML = rows.map(([l,v]) => `<div class="build-stat-row"><span class="build-stat-label">${l}</span><span class="build-stat-value">${v}</span></div>`).join('')
+
+  // Links
+  const linksList = document.getElementById('linksList')
+  const links = []
+  if (project.live_url) links.push([project.live_url, 'Live App', '<svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'])
+  if (project.github_url) links.push([project.github_url, 'GitHub Repo', '<svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>'])
+  if (project.demo_video_url) links.push([project.demo_video_url, 'Demo Video', '<svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'])
+  linksList.innerHTML = links.map(([url,label,icon]) => `<a href="${url}" class="link-item" target="_blank" rel="noopener">${icon}${label}</a>`).join('')
+
+  // Visit buttons
+  document.getElementById('visitBtn').href = project.live_url || '#'
+  document.getElementById('visitBtnSide').href = project.live_url || '#'
+
+  // Show page
+  document.getElementById('loadingState').style.display = 'none'
+  document.getElementById('pageContent').style.display = ''
+}
+
+// ─── LOAD MORE APPS ────────────────────────────────────────
+async function loadMoreApps(currentSlug) {
+  const { data } = await db
+    .from('projects')
+    .select('title, slug, hero_image_url, meta_description')
+    .eq('status', 'approved')
+    .neq('slug', currentSlug)
+    .limit(3)
+
+  if (!data || data.length === 0) return
+
+  const grid = document.getElementById('moreGrid')
+  grid.innerHTML = data.map(p => {
+    const imgStyle = p.hero_image_url
+      ? `background-image:url('${p.hero_image_url}');background-size:cover;background-position:center;`
+      : `background:linear-gradient(135deg,#0e1f35,#152a45);`
+    const catSlug = p.meta_description && p.meta_description.startsWith('category:') ? p.meta_description.replace('category:','') : 'web-apps'
+    return `
+      <a href="app-detail.html?slug=${p.slug}" class="mini-card">
+        <div class="mini-screenshot" style="${imgStyle}"></div>
+        <div class="mini-info">
+          <div class="mini-title">${p.title}</div>
+          <div class="mini-cat">${getCategoryLabel(catSlug)}</div>
+          <div class="mini-rating">
+            ${starSM(false)}
+            <span style="font-size:11px;color:var(--text-muted);">${(4.4+Math.random()*0.5).toFixed(1)}</span>
+          </div>
+        </div>
+      </a>`
+  }).join('')
+
+  document.getElementById('moreSection').style.display = ''
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search)
+  const slug = params.get('slug')
+
+  if (!slug) {
+    // No slug — default to wealthos for backwards compatibility
+    window.location.search = '?slug=wealthos'
+    return
+  }
+
+  const { data, error } = await db
+    .from('projects')
+    .select('*')
+    .eq('slug', slug)
+    .single()
+
+  if (error || !data) {
+    document.getElementById('loadingState').style.display = 'none'
+    document.getElementById('errorState').style.display = ''
+    return
+  }
+
+  renderProject(data)
+  loadMoreApps(slug)
+}
+
+// ─── UI HELPERS ────────────────────────────────────────────
+function toggleMenu() {
+  document.getElementById('mobileMenu').classList.toggle('open')
+}
+
+function setRating(val) {
+  selectedRating = val
+  document.querySelectorAll('.star-pick').forEach((s, i) => s.classList.toggle('lit', i < val))
+}
+
+function toggleSave() {
+  saved = !saved
+  const btn = document.getElementById('saveBtn')
+  const btnSide = document.getElementById('saveBtnSide')
+  if (btn) { btn.textContent = saved ? '♥ Saved' : '♥ Save'; btn.style.borderColor = saved ? 'var(--accent)' : ''; btn.style.color = saved ? 'var(--accent)' : '' }
+  if (btnSide) { btnSide.textContent = saved ? '♥ Saved' : '♥ Save to Collection'; btnSide.style.borderColor = saved ? 'var(--accent)' : ''; btnSide.style.color = saved ? 'var(--accent)' : '' }
+}
+
+function submitReview() {
+  const text = document.getElementById('reviewText').value.trim()
+  if (!text || selectedRating === 0) return
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const stars = Array.from({length:5},(_,i)=>starSM(i>=selectedRating)).join('')
+  const item = document.createElement('div')
+  item.className = 'review-item'
+  item.style.animation = 'fadeUp 0.3s ease both'
+  item.innerHTML = `<div class="review-header"><div class="review-author"><div class="review-avatar">You</div><span class="review-author-name">You</span><span class="review-date">${today}</span></div><div class="stars-sm">${stars}</div></div><p class="review-text">${text}</p>`
+  const list = document.getElementById('reviewsList')
+  list.innerHTML = ''
+  list.insertBefore(item, list.firstChild)
+  document.getElementById('reviewText').value = ''
+  selectedRating = 0
+  document.querySelectorAll('.star-pick').forEach(s => s.classList.remove('lit'))
+}
+
+init()
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1452 @@
+sb_publishable_FwyVmaGMXi7MyJnWBVcEGw_AlhdWNV<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submit Your App — IdeaByHuman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0e1420;
+    --surface2: #141c2b;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(99,179,237,0.35);
+    --border-focus: rgba(99,179,237,0.5);
+    --text: #e8edf5;
+    --text-muted: #6b7a96;
+    --text-dim: #3d4a60;
+    --accent: #63b3ed;
+    --accent2: #a78bfa;
+    --accent-glow: rgba(99,179,237,0.15);
+    --gold: #f6c90e;
+    --error: #fc8181;
+    --error-bg: rgba(252,129,129,0.08);
+    --success: #68d391;
+    --radius: 14px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 40% at 15% 0%, rgba(99,179,237,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 35% at 85% 90%, rgba(167,139,250,0.05) 0%, transparent 55%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    height: 60px;
+    background: rgba(8,12,16,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--accent); }
+
+  .nav-back {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s;
+  }
+  .nav-back:hover { color: var(--accent); }
+
+  /* PAGE */
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 84px 40px 80px;
+  }
+
+  /* PAGE HEADER */
+  .page-header {
+    margin-bottom: 40px;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .page-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99,179,237,0.08);
+    border: 1px solid rgba(99,179,237,0.2);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .page-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .page-subtitle {
+    font-size: 15px;
+    color: var(--text-muted);
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* PROGRESS BAR */
+  .progress-wrap {
+    margin-bottom: 40px;
+    animation: fadeUp 0.4s 0.08s ease both;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+  }
+
+  .progress-count {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .step-dots {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .step-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    transition: all 0.25s;
+    cursor: pointer;
+  }
+
+  .step-dot.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    width: 20px;
+    border-radius: 3px;
+  }
+
+  .step-dot.done {
+    background: rgba(99,179,237,0.3);
+    border-color: rgba(99,179,237,0.4);
+  }
+
+  /* FORM STEP */
+  .step {
+    display: none;
+    animation: fadeUp 0.35s ease both;
+  }
+
+  .step.active { display: block; }
+
+  .step-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .step-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.6;
+  }
+
+  /* FORM FIELDS */
+  .field {
+    margin-bottom: 22px;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: 0.1px;
+  }
+
+  .field-label .required {
+    color: var(--accent);
+    margin-left: 3px;
+  }
+
+  .field-help {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+  }
+
+  .field select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7a96' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  .field input::placeholder,
+  .field textarea::placeholder { color: var(--text-dim); }
+
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .field input.error,
+  .field textarea.error,
+  .field select.error {
+    border-color: rgba(252,129,129,0.5);
+    box-shadow: 0 0 0 3px rgba(252,129,129,0.08);
+  }
+
+  .field textarea { resize: vertical; line-height: 1.6; }
+
+  .field-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+  }
+
+  .field-error {
+    font-size: 12px;
+    color: var(--error);
+    display: none;
+  }
+
+  .field-error.show { display: block; }
+
+  .char-counter {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  .char-counter.warn { color: var(--gold); }
+  .char-counter.over { color: var(--error); }
+
+  /* TWO COLUMN */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* CHECKBOXES - AI Tools */
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .checkbox-item:hover {
+    border-color: rgba(99,179,237,0.25);
+  }
+
+  .checkbox-item.checked {
+    background: rgba(99,179,237,0.08);
+    border-color: rgba(99,179,237,0.3);
+  }
+
+  .checkbox-item input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: 4px;
+  }
+
+  .checkbox-item label {
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1.2;
+  }
+
+  .checkbox-item.checked label { color: var(--accent); }
+
+  /* TECH STACK TAGS */
+  .tags-input-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    min-height: 46px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    cursor: text;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .tags-input-wrap:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .tag-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(99,179,237,0.1);
+    border: 1px solid rgba(99,179,237,0.2);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .tag-chip button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+  }
+
+  .tag-chip button:hover { opacity: 1; }
+
+  .tags-input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 3px 4px !important;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 120px;
+    flex: 1;
+    width: auto !important;
+  }
+
+  /* STEP 8: REVIEW */
+  .review-section {
+    margin-bottom: 24px;
+  }
+
+  .review-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .review-section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+  }
+
+  .review-edit-btn {
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 0.2s;
+  }
+  .review-edit-btn:hover { opacity: 0.7; }
+
+  .review-field {
+    margin-bottom: 10px;
+  }
+
+  .review-field-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+
+  .review-field-value {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .review-field-value.truncate {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* AGREEMENTS */
+  .agreement-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .agreement-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .agreement-item:hover { border-color: rgba(255,255,255,0.12); }
+  .agreement-item.checked { border-color: rgba(99,179,237,0.25); background: rgba(99,179,237,0.04); }
+
+  .agreement-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .agreement-item label {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    cursor: pointer;
+  }
+
+  /* NAVIGATION BUTTONS */
+  .form-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 36px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-back {
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-back:hover { border-color: var(--text-muted); color: var(--text); }
+  .btn-back:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-next {
+    background: var(--accent);
+    color: #080c10;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 11px 28px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .btn-next:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-next:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-submit {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #080c10;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 32px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  }
+  .btn-submit:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(99,179,237,0.3);
+  }
+  .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* SUCCESS STATE */
+  .success-screen {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .success-screen.show { display: block; }
+
+  .success-icon {
+    width: 72px;
+    height: 72px;
+    background: rgba(104,211,145,0.12);
+    border: 1px solid rgba(104,211,145,0.25);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    font-size: 28px;
+  }
+
+  .success-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 44px;
+    letter-spacing: 2px;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .success-sub {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.65;
+    max-width: 480px;
+    margin: 0 auto 32px;
+  }
+
+  .success-detail {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    text-align: left;
+    max-width: 480px;
+    margin: 0 auto 32px;
+  }
+
+  .success-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .success-detail-row:last-child { border-bottom: none; }
+  .success-detail-label { color: var(--text-dim); }
+  .success-detail-value { color: var(--text-muted); font-weight: 500; }
+
+  .btn-home {
+    display: inline-block;
+    background: var(--accent);
+    color: #080c10;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 11px 28px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .btn-home:hover { opacity: 0.88; transform: translateY(-1px); }
+
+  /* ERROR BANNER */
+  .error-banner {
+    display: none;
+    background: var(--error-bg);
+    border: 1px solid rgba(252,129,129,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--error);
+    margin-bottom: 20px;
+  }
+  .error-banner.show { display: block; }
+
+  /* LOADING SPINNER */
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(8,12,16,0.3);
+    border-top-color: #080c10;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .spinner.show { display: block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    nav { padding: 0 20px; }
+    .page { padding: 76px 20px 60px; }
+    .page-title { font-size: 38px; }
+    .field-row { grid-template-columns: 1fr; }
+    .checkbox-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .checkbox-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">idea<span>by</span>human</a>
+  <a href="index.html" class="nav-back">← Back to Discover</a>
+</nav>
+
+<!-- PAGE -->
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="page-header">
+    <div class="page-eyebrow">Submit Your App</div>
+    <div class="page-title">Share What You Built</div>
+    <p class="page-subtitle">Tell us your story. We review every submission and feature the best ones for the community.</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap">
+    <div class="progress-header">
+      <span class="progress-label">Progress</span>
+      <span class="progress-count" id="progressCount">Step 1 of 8</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width: 12.5%"></div>
+    </div>
+    <div class="step-dots" id="stepDots"></div>
+  </div>
+
+  <!-- ERROR BANNER -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- FORM -->
+  <form id="submitForm" novalidate>
+
+    <!-- STEP 1: BASIC INFO -->
+    <div class="step active" id="step-1">
+      <div class="step-title">Basic Information</div>
+      <p class="step-desc">Start with the essentials — what's your project called and what does it do?</p>
+
+      <div class="field">
+        <label class="field-label" for="title">Project Title <span class="required">*</span></label>
+        <p class="field-help">What's your project called?</p>
+        <input type="text" id="title" name="title" placeholder="e.g., Smart Meeting Summarizer" maxlength="255">
+        <div class="field-footer">
+          <span class="field-error" id="title-error">Title must be 3–255 characters</span>
+          <span class="char-counter" id="title-counter">0 / 255</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="short_description">Short Description <span class="required">*</span></label>
+        <p class="field-help">One or two sentences explaining what your project does</p>
+        <textarea id="short_description" name="short_description" rows="3" placeholder="An app that listens to meetings and generates AI summaries automatically" maxlength="150"></textarea>
+        <div class="field-footer">
+          <span class="field-error" id="short_description-error">Description must be 20–150 characters</span>
+          <span class="char-counter" id="short_description-counter">0 / 150</span>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="category_id">Category <span class="required">*</span></label>
+          <p class="field-help">What best describes your project?</p>
+          <select id="category_id" name="category_id">
+            <option value="">— Select a category —</option>
+            <option value="web-apps">Web Applications</option>
+            <option value="mobile-apps">Mobile Apps</option>
+            <option value="content-tools">Content Tools</option>
+            <option value="automation">Automation</option>
+            <option value="creative">Creative Projects</option>
+            <option value="data-analytics">Data & Analytics</option>
+            <option value="ecommerce">E-commerce</option>
+          </select>
+          <div class="field-footer">
+            <span class="field-error" id="category_id-error">Please select a category</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="build_time_hours">Build Time (Hours)</label>
+          <p class="field-help">Approx. hours spent building</p>
+          <input type="number" id="build_time_hours" name="build_time_hours" placeholder="e.g., 40" min="1" max="2000">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="live_url">Live Project URL <span class="required">*</span></label>
+        <p class="field-help">Where can people access your project?</p>
+        <input type="url" id="live_url" name="live_url" placeholder="https://yourproject.com">
+        <div class="field-footer">
+          <span class="field-error" id="live_url-error">Enter a valid URL starting with https://</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: LINKS & MEDIA -->
+    <div class="step" id="step-2">
+      <div class="step-title">Links & Media</div>
+      <p class="step-desc">Add your GitHub repo, demo video, and a hero image for your project listing.</p>
+
+      <div class="field">
+        <label class="field-label" for="github_url">GitHub Repository</label>
+        <p class="field-help">Link to your code repository (optional)</p>
+        <input type="url" id="github_url" name="github_url" placeholder="https://github.com/yourname/project">
+        <div class="field-footer">
+          <span class="field-error" id="github_url-error">Must be a valid GitHub URL</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="demo_video_url">Demo Video</label>
+        <p class="field-help">YouTube or Vimeo link showing your project in action (optional)</p>
+        <input type="url" id="demo_video_url" name="demo_video_url" placeholder="https://youtube.com/watch?v=...">
+        <div class="field-footer">
+          <span class="field-error" id="demo_video_url-error">Must be a valid YouTube or Vimeo URL</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="hero_image_url">Hero Image URL <span class="required">*</span></label>
+        <p class="field-help">Direct URL to your main project image (1200×630px recommended, 16:9 ratio). Image upload via file picker coming soon.</p>
+        <input type="url" id="hero_image_url" name="hero_image_url" placeholder="https://example.com/your-image.png">
+        <div class="field-footer">
+          <span class="field-error" id="hero_image_url-error">Enter a valid image URL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: THE PROBLEM -->
+    <div class="step" id="step-3">
+      <div class="step-title">The Problem</div>
+      <p class="step-desc">What problem did you identify? What gap or need were you trying to fill?</p>
+
+      <div class="field">
+        <label class="field-label" for="story_problem">Describe the Problem <span class="required">*</span></label>
+        <p class="field-help">300–400 words recommended. Be specific about the pain point you experienced.</p>
+        <textarea id="story_problem" name="story_problem" rows="10" placeholder="I was spending 30 minutes every morning transcribing meeting notes..." maxlength="2000"></textarea>
+        <div class="field-footer">
+          <span class="field-error" id="story_problem-error">Must be at least 150 characters</span>
+          <span class="char-counter" id="story_problem-counter">0 / 2000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4: YOUR IDEA -->
+    <div class="step" id="step-4">
+      <div class="step-title">Your Idea</div>
+      <p class="step-desc">What was your creative vision? How did you approach solving the problem?</p>
+
+      <div class="field">
+        <label class="field-label" for="story_idea">Describe Your Idea <span class="required">*</span></label>
+        <p class="field-help">200–300 words recommended. What makes your approach unique?</p>
+        <textarea id="story_idea" name="story_idea" rows="10" placeholder="Instead of building another generic tool, I wanted to create something that learns your meeting style..." maxlength="2000"></textarea>
+        <div class="field-footer">
+          <span class="field-error" id="story_idea-error">Must be at least 150 characters</span>
+          <span class="char-counter" id="story_idea-counter">0 / 2000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5: HOW YOU USED AI -->
+    <div class="step" id="step-5">
+      <div class="step-title">How You Used AI</div>
+      <p class="step-desc">This is the heart of what makes IdeaByHuman different. Tell us everything.</p>
+
+      <div class="field">
+        <label class="field-label" for="story_ai_process">Describe Your AI Process <span class="required">*</span></label>
+        <p class="field-help">300–400 words recommended. Which tools did you use? How did you prompt? How did you iterate?</p>
+        <textarea id="story_ai_process" name="story_ai_process" rows="10" placeholder="I used Claude API for summarization with custom prompts that evolved over 50+ iterations..." maxlength="2500"></textarea>
+        <div class="field-footer">
+          <span class="field-error" id="story_ai_process-error">Must be at least 200 characters</span>
+          <span class="char-counter" id="story_ai_process-counter">0 / 2500</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6: SURPRISES -->
+    <div class="step" id="step-6">
+      <div class="step-title">Surprises & Learnings</div>
+      <p class="step-desc">What went differently than expected? This is optional but makes for a great story.</p>
+
+      <div class="field">
+        <label class="field-label" for="story_surprises">What Surprised You?</label>
+        <p class="field-help">200–300 words recommended. What did you learn about AI or building products?</p>
+        <textarea id="story_surprises" name="story_surprises" rows="10" placeholder="I expected the hardest part to be getting transcription right, but it was actually prompt engineering..." maxlength="2000"></textarea>
+        <div class="field-footer">
+          <span class="field-error" id="story_surprises-error">If provided, must be at least 50 characters</span>
+          <span class="char-counter" id="story_surprises-counter">0 / 2000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 7: TECHNICAL DETAILS -->
+    <div class="step" id="step-7">
+      <div class="step-title">Technical Details</div>
+      <p class="step-desc">Help the community understand how you built this.</p>
+
+      <div class="field">
+        <label class="field-label">AI Tools Used <span class="required">*</span></label>
+        <p class="field-help">Select all AI tools you used to build this project</p>
+        <div class="checkbox-grid" id="aiToolsGrid">
+          <!-- populated by JS -->
+        </div>
+        <div class="field-footer">
+          <span class="field-error" id="ai_tools-error">Select at least one AI tool</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Technology Stack <span class="required">*</span></label>
+        <p class="field-help">Type a technology and press Enter or comma to add it</p>
+        <div class="tags-input-wrap" id="tagsWrap">
+          <input class="tags-input" type="text" id="tagsInput" placeholder="Next.js, Supabase, Claude API…">
+        </div>
+        <input type="hidden" id="tech_stack" name="tech_stack">
+        <div class="field-footer">
+          <span class="field-error" id="tech_stack-error">Add at least 3 technologies</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="key_prompts">Key Prompts</label>
+        <p class="field-help">Share 1–2 prompts that were particularly effective (optional)</p>
+        <textarea id="key_prompts" name="key_prompts" rows="4" placeholder="You are an expert meeting facilitator tasked with extracting action items..." maxlength="1000"></textarea>
+        <div class="field-footer">
+          <span class="field-error"></span>
+          <span class="char-counter" id="key_prompts-counter">0 / 1000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 8: REVIEW & SUBMIT -->
+    <div class="step" id="step-8">
+      <div class="step-title">Review & Submit</div>
+      <p class="step-desc">Check everything looks right, agree to the terms, and submit for review.</p>
+
+      <div id="reviewSummary">
+        <!-- populated by JS -->
+      </div>
+
+      <div class="agreement-list">
+        <label class="agreement-item" id="agree1-wrap">
+          <input type="checkbox" id="agree1" onchange="toggleAgreement('agree1-wrap', this)">
+          <label for="agree1">I confirm this project was built with meaningful AI involvement — AI wasn't just used to write a README, it was central to building the product.</label>
+        </label>
+        <label class="agreement-item" id="agree2-wrap">
+          <input type="checkbox" id="agree2" onchange="toggleAgreement('agree2-wrap', this)">
+          <label for="agree2">I have permission to share this project publicly and the information I've provided is accurate.</label>
+        </label>
+        <label class="agreement-item" id="agree3-wrap">
+          <input type="checkbox" id="agree3" onchange="toggleAgreement('agree3-wrap', this)">
+          <label for="agree3">I agree to IdeaByHuman's Content Guidelines and understand submissions are subject to curator review.</label>
+        </label>
+      </div>
+
+      <div class="field-footer" style="margin-bottom: 0;">
+        <span class="field-error" id="agree-error" style="display:none;">Please agree to all three statements before submitting</span>
+      </div>
+    </div>
+
+  </form>
+
+  <!-- FORM NAV -->
+  <div class="form-nav" id="formNav">
+    <button class="btn-back" id="btnBack" onclick="prevStep()" disabled>← Back</button>
+    <button class="btn-next" id="btnNext" onclick="nextStep()">
+      Continue <span>→</span>
+      <div class="spinner" id="btnSpinner"></div>
+    </button>
+  </div>
+
+  <!-- SUCCESS SCREEN -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">✓</div>
+    <div class="success-title">Submission Received</div>
+    <p class="success-sub">Your project has been submitted for review. We'll take a look and get back to you within 7–10 days.</p>
+    <div class="success-detail" id="successDetail"></div>
+    <a href="index.html" class="btn-home">Back to Discover →</a>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+// ─── SUPABASE CONFIG ───────────────────────────────────────
+const SUPABASE_URL = 'https://pzfpthfiykhywirtoedr.supabase.co'
+const SUPABASE_ANON_KEY = 'sb_publishable_FwyVmaGMXi7MyJnWBVcEGw_AlhdWNVY'
+const { createClient } = supabase
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// ─── STATE ─────────────────────────────────────────────────
+let currentStep = 1
+const TOTAL_STEPS = 8
+const techTags = []
+const aiToolsSelected = []
+
+const AI_TOOLS = [
+  'Claude', 'ChatGPT', 'GPT-4', 'Gemini', 'Copilot',
+  'Midjourney', 'DALL-E', 'Runway', 'ElevenLabs',
+  'Replicate', 'Hugging Face', 'Custom / Other'
+]
+
+// ─── INIT ───────────────────────────────────────────────────
+function init() {
+  buildStepDots()
+  buildAiToolsGrid()
+  setupCharCounters()
+  setupTagsInput()
+}
+
+function buildStepDots() {
+  const wrap = document.getElementById('stepDots')
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const dot = document.createElement('div')
+    dot.className = 'step-dot' + (i === 1 ? ' active' : '')
+    dot.id = `dot-${i}`
+    dot.title = `Step ${i}`
+    dot.onclick = () => { if (i < currentStep) goToStep(i) }
+    wrap.appendChild(dot)
+  }
+}
+
+function buildAiToolsGrid() {
+  const grid = document.getElementById('aiToolsGrid')
+  AI_TOOLS.forEach(tool => {
+    const item = document.createElement('label')
+    item.className = 'checkbox-item'
+    item.id = `tool-wrap-${tool.replace(/\s/g,'')}`
+    item.innerHTML = `
+      <input type="checkbox" value="${tool}" onchange="toggleAiTool('${tool}', this, '${tool.replace(/\s/g,'')}')">
+      <label>${tool}</label>
+    `
+    grid.appendChild(item)
+  })
+}
+
+function setupCharCounters() {
+  const fields = [
+    { id: 'title', max: 255 },
+    { id: 'short_description', max: 150 },
+    { id: 'story_problem', max: 2000 },
+    { id: 'story_idea', max: 2000 },
+    { id: 'story_ai_process', max: 2500 },
+    { id: 'story_surprises', max: 2000 },
+    { id: 'key_prompts', max: 1000 },
+  ]
+  fields.forEach(({ id, max }) => {
+    const el = document.getElementById(id)
+    const counter = document.getElementById(`${id}-counter`)
+    if (!el || !counter) return
+    el.addEventListener('input', () => {
+      const len = el.value.length
+      counter.textContent = `${len} / ${max}`
+      counter.className = 'char-counter' + (len > max * 0.9 ? ' warn' : '') + (len >= max ? ' over' : '')
+    })
+  })
+}
+
+function setupTagsInput() {
+  const input = document.getElementById('tagsInput')
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input.value.trim().replace(/,$/, ''))
+    } else if (e.key === 'Backspace' && input.value === '' && techTags.length > 0) {
+      removeTag(techTags[techTags.length - 1])
+    }
+  })
+  input.addEventListener('blur', () => {
+    if (input.value.trim()) addTag(input.value.trim())
+  })
+  document.getElementById('tagsWrap').addEventListener('click', () => input.focus())
+}
+
+function addTag(val) {
+  if (!val || techTags.includes(val) || techTags.length >= 15) return
+  techTags.push(val)
+  renderTags()
+  document.getElementById('tagsInput').value = ''
+  updateHiddenTechStack()
+}
+
+function removeTag(val) {
+  const i = techTags.indexOf(val)
+  if (i > -1) techTags.splice(i, 1)
+  renderTags()
+  updateHiddenTechStack()
+}
+
+function renderTags() {
+  const wrap = document.getElementById('tagsWrap')
+  const input = document.getElementById('tagsInput')
+  // remove existing chips
+  wrap.querySelectorAll('.tag-chip').forEach(c => c.remove())
+  techTags.forEach(tag => {
+    const chip = document.createElement('div')
+    chip.className = 'tag-chip'
+    chip.innerHTML = `${tag}<button type="button" onclick="removeTag('${tag}')">×</button>`
+    wrap.insertBefore(chip, input)
+  })
+}
+
+function updateHiddenTechStack() {
+  document.getElementById('tech_stack').value = techTags.join(', ')
+}
+
+function toggleAiTool(tool, checkbox, id) {
+  const wrap = document.getElementById(`tool-wrap-${id}`)
+  if (checkbox.checked) {
+    if (!aiToolsSelected.includes(tool)) aiToolsSelected.push(tool)
+    wrap.classList.add('checked')
+  } else {
+    const i = aiToolsSelected.indexOf(tool)
+    if (i > -1) aiToolsSelected.splice(i, 1)
+    wrap.classList.remove('checked')
+  }
+}
+
+function toggleAgreement(wrapId, checkbox) {
+  document.getElementById(wrapId).classList.toggle('checked', checkbox.checked)
+}
+
+// ─── NAVIGATION ─────────────────────────────────────────────
+function goToStep(n) {
+  document.getElementById(`step-${currentStep}`).classList.remove('active')
+  document.getElementById(`dot-${currentStep}`).classList.remove('active')
+  document.getElementById(`dot-${currentStep}`).classList.add('done')
+
+  currentStep = n
+  document.getElementById(`step-${currentStep}`).classList.add('active')
+  document.getElementById(`dot-${currentStep}`).classList.remove('done')
+  document.getElementById(`dot-${currentStep}`).classList.add('active')
+
+  updateProgress()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function updateProgress() {
+  const pct = (currentStep / TOTAL_STEPS) * 100
+  document.getElementById('progressFill').style.width = `${pct}%`
+  document.getElementById('progressCount').textContent = `Step ${currentStep} of ${TOTAL_STEPS}`
+
+  document.getElementById('btnBack').disabled = currentStep === 1
+
+  const btnNext = document.getElementById('btnNext')
+  if (currentStep === TOTAL_STEPS) {
+    btnNext.innerHTML = 'Submit for Review <div class="spinner" id="btnSpinner"></div>'
+    btnNext.className = 'btn-submit'
+    btnNext.onclick = handleSubmit
+  } else {
+    btnNext.innerHTML = 'Continue →'
+    btnNext.className = 'btn-next'
+    btnNext.onclick = nextStep
+  }
+
+  hideError()
+
+  if (currentStep === TOTAL_STEPS) buildReviewSummary()
+}
+
+function nextStep() {
+  if (!validateStep(currentStep)) return
+  if (currentStep < TOTAL_STEPS) goToStep(currentStep + 1)
+}
+
+function prevStep() {
+  if (currentStep > 1) goToStep(currentStep - 1)
+}
+
+// ─── VALIDATION ─────────────────────────────────────────────
+function validateStep(step) {
+  let valid = true
+
+  const show = (id, show) => {
+    const el = document.getElementById(id)
+    if (el) el.classList.toggle('show', show)
+  }
+
+  const setErr = (fieldId, hasError) => {
+    const el = document.getElementById(fieldId)
+    if (el) el.classList.toggle('error', hasError)
+    return hasError
+  }
+
+  if (step === 1) {
+    const title = document.getElementById('title').value.trim()
+    if (setErr('title', title.length < 3 || title.length > 255)) { show('title-error', true); valid = false } else show('title-error', false)
+
+    const desc = document.getElementById('short_description').value.trim()
+    if (setErr('short_description', desc.length < 20 || desc.length > 150)) { show('short_description-error', true); valid = false } else show('short_description-error', false)
+
+    const cat = document.getElementById('category_id').value
+    if (setErr('category_id', !cat)) { show('category_id-error', true); valid = false } else show('category_id-error', false)
+
+    const url = document.getElementById('live_url').value.trim()
+    const validUrl = /^https?:\/\/.+\..+/.test(url)
+    if (setErr('live_url', !validUrl)) { show('live_url-error', true); valid = false } else show('live_url-error', false)
+  }
+
+  if (step === 2) {
+    const github = document.getElementById('github_url').value.trim()
+    if (github && !github.startsWith('https://github.com/')) {
+      setErr('github_url', true); show('github_url-error', true); valid = false
+    } else { setErr('github_url', false); show('github_url-error', false) }
+
+    const video = document.getElementById('demo_video_url').value.trim()
+    const validVideo = !video || /youtube\.com|youtu\.be|vimeo\.com/.test(video)
+    if (!validVideo) { setErr('demo_video_url', true); show('demo_video_url-error', true); valid = false }
+    else { setErr('demo_video_url', false); show('demo_video_url-error', false) }
+
+    const hero = document.getElementById('hero_image_url').value.trim()
+    if (setErr('hero_image_url', !hero || !/^https?:\/\/.+/.test(hero))) { show('hero_image_url-error', true); valid = false }
+    else show('hero_image_url-error', false)
+  }
+
+  if (step === 3) {
+    const val = document.getElementById('story_problem').value.trim()
+    if (setErr('story_problem', val.length < 150)) { show('story_problem-error', true); valid = false }
+    else show('story_problem-error', false)
+  }
+
+  if (step === 4) {
+    const val = document.getElementById('story_idea').value.trim()
+    if (setErr('story_idea', val.length < 150)) { show('story_idea-error', true); valid = false }
+    else show('story_idea-error', false)
+  }
+
+  if (step === 5) {
+    const val = document.getElementById('story_ai_process').value.trim()
+    if (setErr('story_ai_process', val.length < 200)) { show('story_ai_process-error', true); valid = false }
+    else show('story_ai_process-error', false)
+  }
+
+  if (step === 6) {
+    const val = document.getElementById('story_surprises').value.trim()
+    if (val && val.length < 50) { setErr('story_surprises', true); show('story_surprises-error', true); valid = false }
+    else { setErr('story_surprises', false); show('story_surprises-error', false) }
+  }
+
+  if (step === 7) {
+    if (aiToolsSelected.length === 0) { show('ai_tools-error', true); valid = false }
+    else show('ai_tools-error', false)
+
+    if (techTags.length < 3) { show('tech_stack-error', true); valid = false }
+    else show('tech_stack-error', false)
+  }
+
+  return valid
+}
+
+// ─── REVIEW SUMMARY ─────────────────────────────────────────
+function buildReviewSummary() {
+  const sections = [
+    {
+      title: 'Basic Info', step: 1, fields: [
+        { label: 'Title', value: v('title') },
+        { label: 'Description', value: v('short_description') },
+        { label: 'Category', value: document.getElementById('category_id').options[document.getElementById('category_id').selectedIndex]?.text || '—' },
+        { label: 'Live URL', value: v('live_url') },
+        { label: 'Build Time', value: v('build_time_hours') ? `${v('build_time_hours')} hours` : '—' },
+      ]
+    },
+    {
+      title: 'Links & Media', step: 2, fields: [
+        { label: 'GitHub', value: v('github_url') || '—' },
+        { label: 'Demo Video', value: v('demo_video_url') || '—' },
+        { label: 'Hero Image', value: v('hero_image_url') },
+      ]
+    },
+    {
+      title: 'Story', step: 3, fields: [
+        { label: 'The Problem', value: v('story_problem'), truncate: true },
+        { label: 'Your Idea', value: v('story_idea'), truncate: true },
+        { label: 'How You Used AI', value: v('story_ai_process'), truncate: true },
+        { label: 'Surprises', value: v('story_surprises') || '—', truncate: true },
+      ]
+    },
+    {
+      title: 'Technical Details', step: 7, fields: [
+        { label: 'AI Tools', value: aiToolsSelected.join(', ') || '—' },
+        { label: 'Tech Stack', value: techTags.join(', ') || '—' },
+        { label: 'Key Prompts', value: v('key_prompts') || '—', truncate: true },
+      ]
+    },
+  ]
+
+  const container = document.getElementById('reviewSummary')
+  container.innerHTML = sections.map(s => `
+    <div class="review-section">
+      <div class="review-section-header">
+        <div class="review-section-title">${s.title}</div>
+        <button class="review-edit-btn" onclick="goToStep(${s.step})">Edit</button>
+      </div>
+      ${s.fields.map(f => `
+        <div class="review-field">
+          <div class="review-field-label">${f.label}</div>
+          <div class="review-field-value${f.truncate ? ' truncate' : ''}">${f.value}</div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('')
+}
+
+function v(id) {
+  return document.getElementById(id)?.value?.trim() || ''
+}
+
+// ─── SUBMIT ──────────────────────────────────────────────────
+async function handleSubmit() {
+  // Check agreements
+  const a1 = document.getElementById('agree1').checked
+  const a2 = document.getElementById('agree2').checked
+  const a3 = document.getElementById('agree3').checked
+
+  if (!a1 || !a2 || !a3) {
+    const errEl = document.getElementById('agree-error')
+    errEl.style.display = 'block'
+    return
+  }
+
+  document.getElementById('agree-error').style.display = 'none'
+
+  const btn = document.querySelector('.btn-submit')
+  btn.disabled = true
+  btn.textContent = 'Submitting…'
+
+  hideError()
+
+  // Build slug from title
+  const slug = v('title').toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 100)
+    + '-' + Date.now()
+
+  // Build payload matching DB schema
+  const payload = {
+    title: v('title'),
+    slug: slug,
+    short_description: v('short_description'),
+    live_url: v('live_url'),
+    github_url: v('github_url') || null,
+    demo_video_url: v('demo_video_url') || null,
+    story_problem: v('story_problem'),
+    story_idea: v('story_idea'),
+    story_ai_process: v('story_ai_process'),
+    story_surprises: v('story_surprises') || null,
+    ai_tools_used: aiToolsSelected,
+    build_time_hours: v('build_time_hours') ? parseInt(v('build_time_hours')) : null,
+    key_prompts: v('key_prompts') || null,
+    hero_image_url: v('hero_image_url'),
+    screenshot_urls: [],
+    status: 'pending',
+    featured: false,
+  }
+
+  // Note: category_id needs a UUID from DB — for now we store slug in meta_description
+  // as a workaround until we fetch real category UUIDs
+  const catSlug = document.getElementById('category_id').value
+  payload.meta_description = `category:${catSlug}`
+
+  try {
+    const { data, error } = await db
+      .from('projects')
+      .insert([payload])
+      .select()
+
+    if (error) {
+      showError(`Submission failed: ${error.message}`)
+      btn.disabled = false
+      btn.textContent = 'Submit for Review'
+      return
+    }
+
+    // Success
+    showSuccess(data[0])
+
+  } catch (err) {
+    showError(`Something went wrong: ${err.message}`)
+    btn.disabled = false
+    btn.textContent = 'Submit for Review'
+  }
+}
+
+function showSuccess(record) {
+  document.getElementById('submitForm').style.display = 'none'
+  document.getElementById('formNav').style.display = 'none'
+  document.getElementById('progressWrap') && (document.getElementById('progressWrap').style.display = 'none')
+
+  document.getElementById('successDetail').innerHTML = `
+    <div class="success-detail-row">
+      <span class="success-detail-label">Project</span>
+      <span class="success-detail-value">${record.title}</span>
+    </div>
+    <div class="success-detail-row">
+      <span class="success-detail-label">Status</span>
+      <span class="success-detail-value">Pending Review</span>
+    </div>
+    <div class="success-detail-row">
+      <span class="success-detail-label">ID</span>
+      <span class="success-detail-value" style="font-size:11px; font-family:monospace;">${record.id}</span>
+    </div>
+    <div class="success-detail-row">
+      <span class="success-detail-label">Submitted</span>
+      <span class="success-detail-value">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+    </div>
+  `
+
+  document.getElementById('successScreen').classList.add('show')
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function showError(msg) {
+  const banner = document.getElementById('errorBanner')
+  banner.textContent = msg
+  banner.classList.add('show')
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function hideError() {
+  document.getElementById('errorBanner').classList.remove('show')
+}
+
+// ─── START ───────────────────────────────────────────────────
+init()
+</script>
+</body>
+</html>
