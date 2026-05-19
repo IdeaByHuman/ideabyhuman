@@ -12,6 +12,20 @@ export const metadata: Metadata = {
     siteName: 'ideabyhuman',
     type: 'website',
   },
+  icons: {
+    icon: [
+      {
+        url: '/icon-light.svg',
+        type: 'image/svg+xml',
+        media: '(prefers-color-scheme: light)',
+      },
+      {
+        url: '/icon-dark.svg',
+        type: 'image/svg+xml',
+        media: '(prefers-color-scheme: dark)',
+      },
+    ],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
