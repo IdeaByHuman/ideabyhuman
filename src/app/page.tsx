@@ -1,116 +1,162 @@
-import { ArrowRight } from 'lucide-react'
-import Link from 'next/link'
-import { ProjectCard } from '@/components/project-card'
+import type { Metadata } from 'next'
 
-export default async function HomePage() {
-  // Placeholder featured projects - would be fetched from DB in production
-  const featuredProjects = [
-    {
-      title: 'AI Art Curator',
-      slug: 'ai-art-curator',
-      shortDescription: 'A web app that uses AI to curate and organize digital art collections.',
-      heroImageUrl: 'https://images.unsplash.com/photo-1633356122544-f134324ef6db?w=400&h=300&fit=crop',
-      category: 'Web App',
-      creatorName: 'Sarah Chen',
-      aiTools: ['OpenAI', 'Vercel AI'],
-    },
-    {
-      title: 'Smart Recipe Generator',
-      slug: 'smart-recipe-generator',
-      shortDescription: 'Generate recipes based on ingredients you have at home using AI.',
-      heroImageUrl: 'https://images.unsplash.com/photo-1495512821756-a3efb6c91e8f?w=400&h=300&fit=crop',
-      category: 'App',
-      creatorName: 'Marcus Liu',
-      aiTools: ['Claude', 'Next.js'],
-    },
-    {
-      title: 'Design System Builder',
-      slug: 'design-system-builder',
-      shortDescription: 'AI-powered tool to generate consistent design systems from brand guidelines.',
-      heroImageUrl: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=300&fit=crop',
-      category: 'Design Tool',
-      creatorName: 'Jordan Park',
-      aiTools: ['GPT-4', 'Tailwind CSS'],
-    },
-  ]
+export const metadata: Metadata = {
+  title: 'IdeaByHuman',
+  description: 'AI-native venture studio. Building, and helping others build.',
+  openGraph: {
+    title: 'IdeaByHuman',
+    description: 'AI-native venture studio. Building, and helping others build.',
+    url: 'https://ideabyhuman.com',
+    type: 'website',
+  },
+}
 
+const landingStyles = `
+  :root {
+    --bg: #F8F7F2;
+    --fg: #1F1D1B;
+    --accent: #B68E2A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1115;
+      --fg: #E8E6E1;
+      --accent: #D4A84A;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "EB Garamond", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    min-height: 100vh;
+    padding: 140px 40px 80px;
+  }
+  main {
+    max-width: 640px;
+  }
+  .wordmark {
+    font-size: 60px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    margin-bottom: 40px;
+  }
+  .wordmark .accent { color: var(--accent); }
+  .statement {
+    font-size: 26px;
+    font-style: italic;
+    line-height: 1.45;
+    margin-bottom: 56px;
+  }
+  .rule {
+    width: 96px;
+    height: 1px;
+    background: var(--fg);
+    opacity: 0.25;
+    border: 0;
+    margin: 0 0 20px;
+  }
+  .label {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    opacity: 0.6;
+    margin-bottom: 16px;
+  }
+  .section { margin-bottom: 44px; }
+  .projects { list-style: none; }
+  .projects li { margin-bottom: 14px; }
+  .projects a {
+    font-size: 28px;
+    color: var(--accent);
+    text-decoration: none;
+    line-height: 1.45;
+  }
+  .projects a:hover { text-decoration: underline; }
+  .projects a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .contact {
+    margin-top: 96px;
+  }
+  .contact a {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 15px;
+    color: var(--fg);
+    opacity: 0.6;
+    text-decoration: none;
+  }
+  .contact a:hover { text-decoration: underline; }
+  .contact a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  @media (max-width: 600px) {
+    body { padding: 96px 24px 64px; }
+    .wordmark { font-size: 44px; }
+    .statement { font-size: 22px; }
+    .projects a { font-size: 24px; }
+  }
+`
+
+export default function HomePage() {
   return (
-    <div className="w-full">
-      {/* Hero Section */}
-      <section className="px-4 py-20 sm:py-32 max-w-6xl mx-auto">
-        <div className="text-center space-y-6">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
-            Where human vision meets <span className="text-blue-600">AI capability</span>
-          </h1>
-          <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto">
-            A curated showcase of projects built by people who had the idea and used AI to bring it to life.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-            <Link
-              href="/projects"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Explore Projects <ArrowRight size={18} />
-            </Link>
-            <Link
-              href="/submit"
-              className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Submit Your Project
-            </Link>
-          </div>
-        </div>
-      </section>
+    <>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link
+        href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital@0;1&family=Inter:wght@400&display=swap"
+        rel="stylesheet"
+      />
+      <style dangerouslySetInnerHTML={{ __html: landingStyles }} />
+      <main>
+        <h1 className="wordmark">
+          <span className="accent">I</span>deaBy<span className="accent">H</span>uman
+        </h1>
 
-      {/* How It Works Section */}
-      <section className="px-4 py-20 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">How it works</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: 1,
-                title: 'Submit',
-                description: 'Tell us about your project — the idea, the problem you solved, and how you used AI.',
-              },
-              {
-                step: 2,
-                title: 'Review',
-                description: 'Our team reviews submissions to ensure quality and alignment with our community values.',
-              },
-              {
-                step: 3,
-                title: 'Showcase',
-                description: 'Your project gets featured in our gallery, inspiring others to build with AI.',
-              },
-            ].map((item) => (
-              <div key={item.step} className="bg-white p-8 rounded-lg border border-gray-200">
-                <div className="text-4xl font-bold text-blue-600 mb-4">{item.step}</div>
-                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                <p className="text-gray-600">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        <p className="statement">AI-native venture studio. Building, and helping others build.</p>
 
-      {/* Featured Projects Section */}
-      <section className="px-4 py-20 max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-12">
-          <h2 className="text-3xl font-bold">Featured Projects</h2>
-          <Link
-            href="/projects"
-            className="text-blue-600 font-medium hover:text-blue-700 flex items-center gap-2"
-          >
-            View all <ArrowRight size={18} />
-          </Link>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {featuredProjects.map((project) => (
-            <ProjectCard key={project.slug} {...project} />
-          ))}
-        </div>
-      </section>
-    </div>
+        <section className="section">
+          <hr className="rule" />
+          <h2 className="label">Owned Initiatives</h2>
+          <ul className="projects">
+            <li>
+              <a href="https://themasse.com">MASSÉ</a>
+            </li>
+            <li>
+              <a href="https://slabworthy.com">Slab Worthy</a>
+            </li>
+            <li>
+              <a href="https://theformof.com">TheFormOf</a>
+            </li>
+          </ul>
+        </section>
+
+        <section className="section">
+          <hr className="rule" />
+          <h2 className="label">Advisory</h2>
+          <ul className="projects">
+            <li>
+              <a href="https://lucentchat.com">Lucent</a>
+            </li>
+            <li>
+              <a href="https://brewbyte.co">BrewByte</a>
+            </li>
+          </ul>
+        </section>
+
+        <p className="contact">
+          <a href="mailto:contact@ideabyhuman.com">contact@ideabyhuman.com</a>
+        </p>
+      </main>
+    </>
   )
 }
