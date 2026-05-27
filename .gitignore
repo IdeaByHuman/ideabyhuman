@@ -44,5 +44,24 @@ supabase/.branches/
 *.swp
 *.swo
 
+# Claude Code worktree state — never commit
+.claude/
+
 # OS
 Thumbs.db
+
+# Sensitive — keep in Drive, never commit to this PUBLIC repo
+# See LOCATIONS.md for the canonical Drive structure.
+# Catch-all extensions
+*.docx
+*.pptx
+# Named strategic docs at root
+BO_Primer*
+MB_Feedback*
+IBH_OS_PLAN.md
+STEP_3_AUDIT_BRIEF.md
+SolutionArchitecture.jpg
+IBH_OnePager.js
+IBH_Vision.js
+# Business directory (business plan, pitch deck, invention disclosure, etc.)
+docs/business/
