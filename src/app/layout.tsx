@@ -2,14 +2,15 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'ideabyhuman — Where human vision meets AI capability',
+  title: 'Mike Berry / IdeaByHuman',
   description:
-    'A curated showcase of projects built by people who had the idea and used AI to bring it to life.',
+    'Marketing technology and AI adoption for enterprise commercial organizations. Twenty years at Adobe, Condé Nast, Stitch Fix, eBay, and Apple.',
   openGraph: {
-    title: 'ideabyhuman',
-    description: 'Where human vision meets AI capability',
+    title: 'Mike Berry / IdeaByHuman',
+    description:
+      'Marketing technology and AI adoption for enterprise commercial organizations. Twenty years at Adobe, Condé Nast, Stitch Fix, eBay, and Apple.',
     url: 'https://ideabyhuman.com',
-    siteName: 'ideabyhuman',
+    siteName: 'IdeaByHuman',
     type: 'website',
   },
   icons: {
