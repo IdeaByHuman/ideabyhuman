@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Download,
   Plus,
@@ -12,8 +14,10 @@ import {
   Upload,
 } from 'lucide-react'
 
-// Trend digest tool. Sources persist in localStorage only - no backend
-// storage by design. The API route exists solely to get around CORS.
+// Trend digest tool. Sources and display preferences persist in localStorage
+// only - no backend storage by design. The API route exists solely to get
+// around CORS. No AI calls here: the tool gathers and formats, something
+// else does the thinking.
 
 type Source = {
   id: string
@@ -38,7 +42,17 @@ type DigestItem = {
   description: string
 }
 
+type Prefs = {
+  filter: string
+  compact: boolean
+  itemCap: number // 0 means All
+  collapsed: string[]
+}
+
 const STORAGE_KEY = 'ibh-trendwatch-sources-v1'
+const PREFS_KEY = 'ibh-trendwatch-prefs-v1'
+
+const DEFAULT_PREFS: Prefs = { filter: '', compact: true, itemCap: 5, collapsed: [] }
 
 const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
   { label: 'Social Media Today', url: 'https://www.socialmediatoday.com/feeds/news/', enabled: true },
@@ -47,11 +61,12 @@ const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
   { label: 'Hootsuite Blog', url: 'https://blog.hootsuite.com/feed/', enabled: true },
   { label: 'Sprout Social', url: 'https://sproutsocial.com/insights/feed/', enabled: true },
   { label: 'Google Trends US', url: 'https://trends.google.com/trending/rss?geo=US', enabled: true },
-  { label: 'r/mentalhealth', url: 'https://www.reddit.com/r/mentalhealth/new/.rss', enabled: true },
   // Note: reddit rate-limits back-to-back requests from one IP - with both
   // subreddit feeds enabled, one may intermittently report HTTP 429. That is
   // reddit, not a broken source; it appears in the per-source status.
-  { label: 'r/therapy', url: 'https://www.reddit.com/r/therapy/new/.rss', enabled: true },
+  // Both ship disabled - turn them on as needed.
+  { label: 'r/mentalhealth', url: 'https://www.reddit.com/r/mentalhealth/new/.rss', enabled: false },
+  { label: 'r/therapy', url: 'https://www.reddit.com/r/therapy/new/.rss', enabled: false },
 ]
 
 function newId(): string {
@@ -88,8 +103,34 @@ function loadSources(): Source[] {
   }
 }
 
+function loadPrefs(): Prefs {
+  try {
+    const raw = window.localStorage.getItem(PREFS_KEY)
+    if (!raw) return DEFAULT_PREFS
+    const p = JSON.parse(raw) as Partial<Prefs>
+    return {
+      filter: typeof p.filter === 'string' ? p.filter : '',
+      compact: p.compact !== false,
+      itemCap: typeof p.itemCap === 'number' ? p.itemCap : 5,
+      collapsed: Array.isArray(p.collapsed)
+        ? p.collapsed.filter((c): c is string => typeof c === 'string')
+        : [],
+    }
+  } catch {
+    return DEFAULT_PREFS
+  }
+}
+
+function parseFilterTerms(filter: string): string[] {
+  return filter
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length > 0)
+}
+
 export default function TrendwatchClient() {
   const [sources, setSources] = useState<Source[] | null>(null)
+  const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [sinceDays, setSinceDays] = useState<number>(7)
   const [fetching, setFetching] = useState(false)
   const [results, setResults] = useState<FeedResult[] | null>(null)
@@ -104,6 +145,7 @@ export default function TrendwatchClient() {
   // localStorage is browser-only - hydrate after mount.
   useEffect(() => {
     setSources(loadSources())
+    setPrefs(loadPrefs())
   }, [])
 
   useEffect(() => {
@@ -115,6 +157,25 @@ export default function TrendwatchClient() {
       }
     }
   }, [sources])
+
+  useEffect(() => {
+    if (prefs !== null) {
+      try {
+        window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+      } catch {
+        // Same as above.
+      }
+    }
+  }, [prefs])
+
+  const filter = prefs?.filter ?? ''
+  const compact = prefs?.compact ?? true
+  const itemCap = prefs?.itemCap ?? 5
+  const collapsed = useMemo(() => new Set(prefs?.collapsed ?? []), [prefs])
+
+  function patchPrefs(patch: Partial<Prefs>) {
+    setPrefs((prev) => ({ ...(prev ?? DEFAULT_PREFS), ...patch }))
+  }
 
   const labelFor = useMemo(() => {
     const m = new Map<string, string>()
@@ -140,15 +201,20 @@ export default function TrendwatchClient() {
   }
 
   function resetDefaults() {
-    if (window.confirm('Replace the current source list with the defaults?')) {
+    if (window.confirm('Replace the current source list and preferences with the defaults?')) {
       setSources(defaultsWithIds())
-      setNotice('Source list reset to defaults.')
+      setPrefs({ ...DEFAULT_PREFS })
+      setNotice('Source list and preferences reset to defaults.')
     }
   }
 
   function exportJson() {
     const data = JSON.stringify(
-      (sources ?? []).map(({ label, url, enabled }) => ({ label, url, enabled })),
+      {
+        sources: (sources ?? []).map(({ label, url, enabled }) => ({ label, url, enabled })),
+        filter,
+        display: { compact, itemCap },
+      },
       null,
       2
     )
@@ -166,8 +232,13 @@ export default function TrendwatchClient() {
     reader.onload = () => {
       try {
         const parsed: unknown = JSON.parse(String(reader.result))
-        if (!Array.isArray(parsed)) throw new Error('not a JSON array')
-        const imported: Source[] = parsed
+        // Accept both shapes: the current { sources, filter, display } object
+        // and the original bare-array export.
+        const rawList: unknown = Array.isArray(parsed)
+          ? parsed
+          : (parsed as { sources?: unknown })?.sources
+        if (!Array.isArray(rawList)) throw new Error('no sources found in file')
+        const imported: Source[] = rawList
           .filter(
             (s): s is { label?: string; url?: string; enabled?: boolean } =>
               !!s && typeof s === 'object' && typeof (s as { url?: unknown }).url === 'string'
@@ -180,6 +251,21 @@ export default function TrendwatchClient() {
           }))
         if (imported.length === 0) throw new Error('no sources found in file')
         setSources(imported)
+        if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') {
+          const obj = parsed as {
+            filter?: unknown
+            display?: { compact?: unknown; itemCap?: unknown }
+          }
+          patchPrefs({
+            ...(typeof obj.filter === 'string' ? { filter: obj.filter } : {}),
+            ...(typeof obj.display?.compact === 'boolean'
+              ? { compact: obj.display.compact }
+              : {}),
+            ...(typeof obj.display?.itemCap === 'number'
+              ? { itemCap: obj.display.itemCap }
+              : {}),
+          })
+        }
         setNotice(`Imported ${imported.length} sources.`)
       } catch (e) {
         setNotice(`Import failed - ${(e as Error).message}`)
@@ -228,40 +314,66 @@ export default function TrendwatchClient() {
     }
   }
 
-  const grouped = useMemo(() => {
+  // Pipeline: fetch -> keyword filter -> per-source cap. Capping before
+  // filtering would throw away matches, so the order is load-bearing.
+  const filteredItems = useMemo(() => {
+    const terms = parseFilterTerms(filter)
+    if (terms.length === 0) return items
+    return items.filter((item) => {
+      const hay = (item.title + ' ' + item.description).toLowerCase()
+      return terms.some((t) => hay.includes(t))
+    })
+  }, [items, filter])
+
+  const cappedGroups = useMemo(() => {
     const groups = new Map<string, DigestItem[]>()
-    for (const item of items) {
+    for (const item of filteredItems) {
       const list = groups.get(item.sourceUrl) ?? []
       list.push(item)
       groups.set(item.sourceUrl, list)
     }
-    return groups
-  }, [items])
+    // Items arrive globally sorted newest-first with unknown dates last, and
+    // grouping preserves that order, so slicing keeps the most recent.
+    return Array.from(groups.entries()).map(([url, group]) => ({
+      url,
+      total: group.length,
+      visible: itemCap > 0 ? group.slice(0, itemCap) : group,
+    }))
+  }, [filteredItems, itemCap])
+
+  const visibleCount = useMemo(
+    () => cappedGroups.reduce((n, g) => n + g.visible.length, 0),
+    [cappedGroups]
+  )
+  const filterActive = parseFilterTerms(filter).length > 0
 
   const digestText = useMemo(() => {
-    if (items.length === 0) return ''
+    if (visibleCount === 0) return ''
     const end = fetchedAt ?? new Date()
     const start = new Date(end.getTime() - sinceDays * 24 * 60 * 60 * 1000)
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
     const okCount = (results ?? []).filter((r) => r.ok).length
     const lines: string[] = [
-      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${okCount} sources, ${items.length} items`,
+      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${okCount} sources, ${visibleCount} items`,
       '',
     ]
-    for (const [url, group] of grouped) {
-      lines.push(`=== ${labelFor(url)} ===`)
-      for (const item of group) {
+    // The digest matches what is on screen (filter + cap applied), with one
+    // exception: collapsed sections are display-only and still included.
+    for (const g of cappedGroups) {
+      if (g.visible.length === 0) continue
+      lines.push(`=== ${labelFor(g.url)} ===`)
+      for (const item of g.visible) {
         lines.push(`- ${item.title}`)
         const when = item.dateUnknown
           ? 'date unknown'
           : new Date(item.date as string).toISOString().slice(0, 10)
         lines.push(`  ${when} | ${item.link}`)
-        if (item.description) lines.push(`  ${item.description}`)
+        if (!compact && item.description) lines.push(`  ${item.description}`)
       }
       lines.push('')
     }
     return lines.join('\n').trimEnd() + '\n'
-  }, [items, grouped, results, sinceDays, fetchedAt, labelFor])
+  }, [cappedGroups, visibleCount, results, sinceDays, fetchedAt, labelFor, compact])
 
   async function copyDigest() {
     try {
@@ -273,13 +385,30 @@ export default function TrendwatchClient() {
     }
   }
 
+  function toggleCollapsed(url: string) {
+    const next = new Set(collapsed)
+    if (next.has(url)) next.delete(url)
+    else next.add(url)
+    patchPrefs({ collapsed: Array.from(next) })
+  }
+
+  // Contrast notes (WCAG AA, measured not guessed): primary buttons are white
+  // on #5c4620 (8.9:1), status green #3d6332 (6.5:1) and red #9a3a24 (6.5:1)
+  // on the page background, placeholders forced to full-opacity #6e6455
+  // (5.8:1 on white) because the framework default renders them at 50%
+  // opacity. color-scheme:light pins native controls in dark-mode browsers.
   const inputCls =
-    'rounded-md border border-[#ddd3c4] bg-white px-2.5 py-1.5 text-sm text-[#2a2620] outline-none focus:border-[#b09a72]'
+    'rounded-md border border-[#c9bda9] bg-white px-2.5 py-1.5 text-sm text-[#2a2620] outline-none placeholder:text-[#6e6455] placeholder:opacity-100 focus:border-[#8a6d3b]'
   const btnCls =
-    'inline-flex items-center gap-1.5 rounded-md border border-[#ddd3c4] bg-white px-3 py-1.5 text-sm text-[#2a2620] hover:bg-[#f3ede2] disabled:opacity-50'
+    'inline-flex items-center gap-1.5 rounded-md border border-[#c9bda9] bg-white px-3 py-1.5 text-sm font-medium text-[#2a2620] hover:bg-[#f3ede2] disabled:opacity-60'
+  const primaryBtnCls =
+    'inline-flex items-center gap-1.5 rounded-md border border-[#5c4620] bg-[#5c4620] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#4a3819] disabled:opacity-70'
 
   return (
-    <main className="min-h-screen bg-[#faf7f1] px-6 py-10 text-[#2a2620]">
+    <main
+      className="min-h-screen bg-[#faf7f1] px-6 py-10 text-[#2a2620]"
+      style={{ colorScheme: 'light' }}
+    >
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-semibold tracking-tight">Trendwatch</h1>
         <p className="mt-1 text-sm text-[#6e6455]">
@@ -299,10 +428,10 @@ export default function TrendwatchClient() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">Sources</h2>
             <div className="flex gap-2">
-              <button type="button" className={btnCls} onClick={exportJson} title="Download the source list as JSON">
+              <button type="button" className={btnCls} onClick={exportJson} title="Download sources, filter, and display preferences as JSON">
                 <Download size={14} /> Export JSON
               </button>
-              <button type="button" className={btnCls} onClick={() => importRef.current?.click()} title="Load a source list from JSON">
+              <button type="button" className={btnCls} onClick={() => importRef.current?.click()} title="Load sources and preferences from JSON">
                 <Upload size={14} /> Import JSON
               </button>
               <input
@@ -329,7 +458,7 @@ export default function TrendwatchClient() {
                   type="checkbox"
                   checked={s.enabled}
                   onChange={(e) => update(s.id, { enabled: e.target.checked })}
-                  className="h-4 w-4 accent-[#8a6d3b]"
+                  className="h-4 w-4 accent-[#5c4620]"
                   title={s.enabled ? 'Enabled' : 'Disabled'}
                 />
                 <input
@@ -346,7 +475,7 @@ export default function TrendwatchClient() {
                 />
                 <button
                   type="button"
-                  className="rounded-md p-1.5 text-[#8a5a4a] hover:bg-[#f3e5df]"
+                  className="rounded-md p-1.5 text-[#7a4636] hover:bg-[#f3e5df]"
                   onClick={() => removeSource(s.id)}
                   title="Remove source"
                 >
@@ -363,7 +492,7 @@ export default function TrendwatchClient() {
         {/* B. Fetch */}
         <section className="mt-10">
           <h2 className="text-lg font-medium">Fetch</h2>
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="text-sm text-[#6e6455]" htmlFor="lookback">
               Lookback
             </label>
@@ -379,7 +508,7 @@ export default function TrendwatchClient() {
             </select>
             <button
               type="button"
-              className={`${btnCls} border-[#8a6d3b] bg-[#8a6d3b] text-white hover:bg-[#75592c]`}
+              className={primaryBtnCls}
               onClick={fetchLatest}
               disabled={fetching || sources === null}
             >
@@ -392,9 +521,21 @@ export default function TrendwatchClient() {
               </span>
             )}
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="text-sm text-[#6e6455]" htmlFor="keyword-filter">
+              Filter
+            </label>
+            <input
+              id="keyword-filter"
+              className={`${inputCls} min-w-0 flex-1`}
+              value={filter}
+              placeholder="Comma-separated terms, e.g. video, algorithm, engagement"
+              onChange={(e) => patchPrefs({ filter: e.target.value })}
+            />
+          </div>
 
           {fetchError && (
-            <p className="mt-3 rounded-md border border-[#d9b8b0] bg-[#f7e9e5] px-3 py-2 text-sm text-[#7a3b2e]">
+            <p className="mt-3 rounded-md border border-[#c99b8f] bg-[#f7e9e5] px-3 py-2 text-sm font-medium text-[#8f3520]">
               Fetch failed - {fetchError}
             </p>
           )}
@@ -404,15 +545,15 @@ export default function TrendwatchClient() {
               {results.map((r) => (
                 <li key={r.url} className="flex items-baseline gap-2 text-sm">
                   <span
-                    className={`inline-block h-2 w-2 shrink-0 translate-y-[-1px] rounded-full ${r.ok ? 'bg-[#4c7a3f]' : 'bg-[#b0442c]'}`}
+                    className={`inline-block h-2 w-2 shrink-0 translate-y-[-1px] rounded-full ${r.ok ? 'bg-[#3d6332]' : 'bg-[#9a3a24]'}`}
                   />
                   <span className="font-medium">{labelFor(r.url)}</span>
                   {r.ok ? (
-                    <span className="text-[#4c7a3f]">
+                    <span className="text-[#3d6332]">
                       {r.itemCount} item{r.itemCount === 1 ? '' : 's'}
                     </span>
                   ) : (
-                    <span className="text-[#b0442c]">failed - {r.error}</span>
+                    <span className="font-medium text-[#9a3a24]">failed - {r.error}</span>
                   )}
                 </li>
               ))}
@@ -422,19 +563,61 @@ export default function TrendwatchClient() {
 
         {/* C. Digest */}
         <section className="mt-10 pb-16">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Digest</h2>
             {items.length > 0 && (
-              <button
-                type="button"
-                className={`${btnCls} border-[#8a6d3b] bg-[#8a6d3b] text-white hover:bg-[#75592c]`}
-                onClick={copyDigest}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? 'Copied' : 'Copy digest'}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5 text-sm text-[#4a443a]">
+                  <input
+                    type="checkbox"
+                    checked={compact}
+                    onChange={(e) => patchPrefs({ compact: e.target.checked })}
+                    className="h-4 w-4 accent-[#5c4620]"
+                  />
+                  Compact
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-[#4a443a]">
+                  Per source
+                  <select
+                    className={inputCls}
+                    value={itemCap}
+                    onChange={(e) => patchPrefs({ itemCap: Number(e.target.value) })}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={0}>All</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={btnCls}
+                  onClick={() => patchPrefs({ collapsed: cappedGroups.map((g) => g.url) })}
+                >
+                  Collapse all
+                </button>
+                <button
+                  type="button"
+                  className={btnCls}
+                  onClick={() => patchPrefs({ collapsed: [] })}
+                >
+                  Expand all
+                </button>
+                {visibleCount > 0 && (
+                  <button type="button" className={primaryBtnCls} onClick={copyDigest}>
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Copied' : 'Copy digest'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
+
+          {items.length > 0 && (
+            <p className="mt-2 text-sm text-[#4a443a]">
+              Showing {visibleCount} of {items.length} items
+            </p>
+          )}
 
           {items.length === 0 ? (
             <p className="mt-3 text-sm text-[#6e6455]">
@@ -442,45 +625,69 @@ export default function TrendwatchClient() {
                 ? 'No items in the selected window.'
                 : 'Fetch to build a digest.'}
             </p>
+          ) : visibleCount === 0 && filterActive ? (
+            <p className="mt-3 rounded-md border border-[#e3d9c8] bg-[#f5efe3] px-3 py-2 text-sm text-[#4a443a]">
+              The fetch succeeded - {items.length} item
+              {items.length === 1 ? '' : 's'} retrieved - but no items match the
+              current filter. Clear or loosen the filter terms above to see them.
+            </p>
           ) : (
             <>
-              <div className="mt-4 space-y-6">
-                {Array.from(grouped.entries()).map(([url, group]) => (
-                  <div key={url}>
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-[#6e6455]">
-                      {labelFor(url)}
-                    </h3>
-                    <div className="mt-2 space-y-2">
-                      {group.map((item, i) => (
-                        <article
-                          key={`${item.link || item.title}-${i}`}
-                          className="rounded-lg border border-[#e3dccd] bg-white p-3"
-                        >
-                          <a
-                            href={item.link || undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-[#2a2620] underline decoration-[#c9b891] underline-offset-2 hover:decoration-[#8a6d3b]"
-                          >
-                            {item.title}
-                          </a>
-                          <p className="mt-0.5 text-xs text-[#6e6455]">
-                            {labelFor(item.sourceUrl)}
-                            {' · '}
-                            {item.dateUnknown
-                              ? 'date unknown'
-                              : new Date(item.date as string).toLocaleDateString()}
-                          </p>
-                          {item.description && (
-                            <p className="mt-1.5 text-sm leading-snug text-[#4a443a]">
-                              {item.description}
-                            </p>
-                          )}
-                        </article>
-                      ))}
+              <div className="mt-4 space-y-4">
+                {cappedGroups.map((g) =>
+                  g.visible.length === 0 ? null : (
+                    <div key={g.url}>
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(g.url)}
+                        className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-sm font-semibold uppercase tracking-wide text-[#4a443a] hover:bg-[#f3ede2]"
+                      >
+                        {collapsed.has(g.url) ? (
+                          <ChevronRight size={15} />
+                        ) : (
+                          <ChevronDown size={15} />
+                        )}
+                        {labelFor(g.url)}
+                        <span className="font-normal normal-case text-[#6e6455]">
+                          {g.visible.length < g.total
+                            ? `showing ${g.visible.length} of ${g.total}`
+                            : `${g.total} item${g.total === 1 ? '' : 's'}`}
+                        </span>
+                      </button>
+                      {!collapsed.has(g.url) && (
+                        <div className="mt-2 space-y-2">
+                          {g.visible.map((item, i) => (
+                            <article
+                              key={`${item.link || item.title}-${i}`}
+                              className={`rounded-lg border border-[#e3dccd] bg-white ${compact ? 'px-3 py-2' : 'p-3'}`}
+                            >
+                              <a
+                                href={item.link || undefined}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-[#2a2620] underline decoration-[#b09a72] underline-offset-2 hover:decoration-[#5c4620]"
+                              >
+                                {item.title}
+                              </a>
+                              <p className="mt-0.5 text-xs text-[#6e6455]">
+                                {labelFor(item.sourceUrl)}
+                                {' · '}
+                                {item.dateUnknown
+                                  ? 'date unknown'
+                                  : new Date(item.date as string).toLocaleDateString()}
+                              </p>
+                              {!compact && item.description && (
+                                <p className="mt-1.5 text-sm leading-snug text-[#4a443a]">
+                                  {item.description}
+                                </p>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                )}
               </div>
 
               <details className="mt-6">
