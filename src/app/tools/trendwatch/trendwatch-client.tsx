@@ -61,6 +61,11 @@ const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
   { label: 'Hootsuite Blog', url: 'https://blog.hootsuite.com/feed/', enabled: true },
   { label: 'Sprout Social', url: 'https://sproutsocial.com/insights/feed/', enabled: true },
   { label: 'Google Trends US', url: 'https://trends.google.com/trending/rss?geo=US', enabled: true },
+  { label: 'ScienceDaily Mental Health', url: 'https://www.sciencedaily.com/rss/mind_brain/mental_health.xml', enabled: true },
+  { label: 'PsyPost', url: 'https://www.psypost.org/feed/', enabled: true },
+  { label: 'Mental Health America', url: 'https://mhanational.org/blog/feed/', enabled: true },
+  // /us/front/feed is the live Psychology Today feed - /us/blog/feed is dead.
+  { label: 'Psychology Today', url: 'https://www.psychologytoday.com/us/front/feed', enabled: true },
   // Note: reddit rate-limits back-to-back requests from one IP - with both
   // subreddit feeds enabled, one may intermittently report HTTP 429. That is
   // reddit, not a broken source; it appears in the per-source status.
@@ -126,6 +131,70 @@ function parseFilterTerms(filter: string): string[] {
     .split(',')
     .map((t) => t.trim().toLowerCase())
     .filter((t) => t.length > 0)
+}
+
+// Common English stopwords (~100) plus feed boilerplate that would otherwise
+// dominate the suggested terms ("submitted by /u/..." appears in every reddit
+// item). Purely mechanical - no scoring cleverness.
+const STOPWORDS = new Set([
+  'a', 'about', 'above', 'after', 'again', 'against', 'all', 'also', 'am', 'an',
+  'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being',
+  'below', 'between', 'both', 'but', 'by', 'can', 'could', 'did', 'do', 'does',
+  'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had',
+  'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'him', 'his', 'how',
+  'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'just', 'like', 'me',
+  'more', 'most', 'my', 'no', 'nor', 'not', 'now', 'of', 'off', 'on', 'once',
+  'only', 'or', 'other', 'our', 'out', 'over', 'own', 'same', 'she', 'should',
+  'so', 'some', 'such', 'than', 'that', 'the', 'their', 'them', 'then',
+  'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too', 'under',
+  'until', 'up', 'very', 'was', 'we', 'were', 'what', 'when', 'where',
+  'which', 'while', 'who', 'why', 'will', 'with', 'would', 'you', 'your',
+  'yours', 'onto', 'upon', 'still', 'even', 'ever',
+  'much', 'many', 'every', 'really', 'thing', 'things', 'youre', 'dont',
+  'cant', 'wont', 'didnt', 'doesnt', 'thats', 'whats', 'submitted', 'comments',
+  'https', 'href', 'nbsp',
+])
+
+function extractCommonTerms(items: DigestItem[]): string[] {
+  // Frequency across all occurrences, gated on appearing in at least 2
+  // distinct items so a single verbose post cannot dominate. Words and
+  // two-word bigrams both count; bigrams are usually the valuable ones.
+  const freq = new Map<string, number>()
+  const itemCount = new Map<string, number>()
+  const good = (t: string) =>
+    t.length >= 4 && !STOPWORDS.has(t) && !/^\d+$/.test(t)
+  for (const item of items) {
+    const tokens = (item.title + ' ' + item.description)
+      .toLowerCase()
+      // WordPress feeds append "The post X appeared first on Y." to every
+      // description - without this, "appeared first" and the blog's own name
+      // top the suggestions. Term extraction only; the digest keeps the raw text.
+      .replace(/the post .{0,120}?appeared first on [^.]*\.?/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+    const inThisItem = new Set<string>()
+    for (let i = 0; i < tokens.length; i++) {
+      const w = tokens[i]
+      if (good(w)) {
+        freq.set(w, (freq.get(w) ?? 0) + 1)
+        inThisItem.add(w)
+      }
+      if (i + 1 < tokens.length && good(w) && good(tokens[i + 1])) {
+        const bg = w + ' ' + tokens[i + 1]
+        freq.set(bg, (freq.get(bg) ?? 0) + 1)
+        inThisItem.add(bg)
+      }
+    }
+    for (const t of inThisItem) {
+      itemCount.set(t, (itemCount.get(t) ?? 0) + 1)
+    }
+  }
+  return Array.from(freq.entries())
+    .filter(([t]) => (itemCount.get(t) ?? 0) >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 15)
+    .map(([t]) => t)
 }
 
 export default function TrendwatchClient() {
@@ -347,6 +416,19 @@ export default function TrendwatchClient() {
   )
   const filterActive = parseFilterTerms(filter).length > 0
 
+  // Recomputes per fetch (items only changes then), never per keystroke, and
+  // always from ALL fetched items regardless of the current filter.
+  const commonTerms = useMemo(() => extractCommonTerms(items), [items])
+  const activeTerms = useMemo(() => new Set(parseFilterTerms(filter)), [filter])
+
+  function toggleTerm(term: string) {
+    const terms = parseFilterTerms(filter)
+    const next = terms.includes(term)
+      ? terms.filter((t) => t !== term)
+      : [...terms, term]
+    patchPrefs({ filter: next.join(', ') })
+  }
+
   const digestText = useMemo(() => {
     if (visibleCount === 0) return ''
     const end = fetchedAt ?? new Date()
@@ -536,6 +618,30 @@ export default function TrendwatchClient() {
               onChange={(e) => patchPrefs({ filter: e.target.value })}
             />
           </div>
+
+          {commonTerms.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="text-sm text-[#6e6455]">Common terms</span>
+              {commonTerms.map((term) => {
+                const active = activeTerms.has(term)
+                return (
+                  <button
+                    key={term}
+                    type="button"
+                    onClick={() => toggleTerm(term)}
+                    title={active ? 'Remove from filter' : 'Add to filter'}
+                    className={
+                      active
+                        ? 'rounded-full border border-[#5c4620] bg-[#5c4620] px-2.5 py-0.5 text-sm font-medium text-white hover:bg-[#4a3819]'
+                        : 'rounded-full border border-[#c9bda9] bg-white px-2.5 py-0.5 text-sm text-[#4a443a] hover:bg-[#f3ede2]'
+                    }
+                  >
+                    {term}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           {fetchError && (
             <p className="mt-3 rounded-md border border-[#c99b8f] bg-[#f7e9e5] px-3 py-2 text-sm font-medium text-[#8f3520]">
