@@ -357,8 +357,11 @@ export default function TrendwatchClient() {
       `Trend digest - ${fmt(start)} to ${fmt(end)} - ${okCount} sources, ${visibleCount} items`,
       '',
     ]
-    // The digest matches what is on screen (filter + cap applied), with one
-    // exception: collapsed sections are display-only and still included.
+    // The digest matches what is on screen (filter + cap applied), with two
+    // deliberate exceptions - compact mode and collapsed sections are
+    // display-only. The digest always carries descriptions and every source:
+    // it is input for analysis elsewhere, and the descriptions are the
+    // substance.
     for (const g of cappedGroups) {
       if (g.visible.length === 0) continue
       lines.push(`=== ${labelFor(g.url)} ===`)
@@ -368,12 +371,12 @@ export default function TrendwatchClient() {
           ? 'date unknown'
           : new Date(item.date as string).toISOString().slice(0, 10)
         lines.push(`  ${when} | ${item.link}`)
-        if (!compact && item.description) lines.push(`  ${item.description}`)
+        if (item.description) lines.push(`  ${item.description}`)
       }
       lines.push('')
     }
     return lines.join('\n').trimEnd() + '\n'
-  }, [cappedGroups, visibleCount, results, sinceDays, fetchedAt, labelFor, compact])
+  }, [cappedGroups, visibleCount, results, sinceDays, fetchedAt, labelFor])
 
   async function copyDigest() {
     try {
