@@ -14,16 +14,24 @@ import {
   Upload,
 } from 'lucide-react'
 
-// Trend digest tool. Sources and display preferences persist in localStorage
-// only - no backend storage by design. The API route exists solely to get
-// around CORS. No AI calls here: the tool gathers and formats, something
-// else does the thinking.
+// Trend digest tool, two-stage flow:
+//   TOPIC sources (mental health and psychology publications) supply
+//   vocabulary - their items become suggested filter terms, never results.
+//   TARGET sources (internet culture and social media publications) supply
+//   the items actually shown and copied.
+// Keywords from topic items filter target items. Sources and preferences
+// persist in localStorage only - no backend storage by design. The API route
+// exists solely to get around CORS. No AI calls here: the tool gathers and
+// formats, something else does the thinking.
+
+type Group = 'topic' | 'target'
 
 type Source = {
   id: string
   label: string
   url: string
   enabled: boolean
+  group: Group
 }
 
 type FeedResult = {
@@ -51,31 +59,42 @@ type Prefs = {
 
 const STORAGE_KEY = 'ibh-trendwatch-sources-v1'
 const PREFS_KEY = 'ibh-trendwatch-prefs-v1'
+const CHIP_LIMIT = 20
 
 const DEFAULT_PREFS: Prefs = { filter: '', compact: true, itemCap: 5, collapsed: [] }
 
 const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
-  { label: 'Social Media Today', url: 'https://www.socialmediatoday.com/feeds/news/', enabled: true },
-  { label: 'Social Media Examiner', url: 'https://www.socialmediaexaminer.com/feed/', enabled: true },
-  { label: 'Buffer Blog', url: 'https://buffer.com/resources/rss/', enabled: true },
-  { label: 'Hootsuite Blog', url: 'https://blog.hootsuite.com/feed/', enabled: true },
-  { label: 'Sprout Social', url: 'https://sproutsocial.com/insights/feed/', enabled: true },
-  { label: 'Google Trends US', url: 'https://trends.google.com/trending/rss?geo=US', enabled: true },
-  { label: 'ScienceDaily Mental Health', url: 'https://www.sciencedaily.com/rss/mind_brain/mental_health.xml', enabled: true },
-  { label: 'PsyPost', url: 'https://www.psypost.org/feed/', enabled: true },
-  { label: 'Mental Health America', url: 'https://mhanational.org/blog/feed/', enabled: true },
-  // /us/front/feed is the live Psychology Today feed - /us/blog/feed is dead.
-  { label: 'Psychology Today', url: 'https://www.psychologytoday.com/us/front/feed', enabled: true },
-  // Note: reddit rate-limits back-to-back requests from one IP - with both
-  // subreddit feeds enabled, one may intermittently report HTTP 429. That is
-  // reddit, not a broken source; it appears in the per-source status.
-  // Both ship disabled - turn them on as needed.
-  { label: 'r/mentalhealth', url: 'https://www.reddit.com/r/mentalhealth/new/.rss', enabled: false },
-  { label: 'r/therapy', url: 'https://www.reddit.com/r/therapy/new/.rss', enabled: false },
+  // TOPIC - vocabulary suppliers.
+  // ScienceDaily publishes ~4 items/month and Mental Health America's feed is
+  // currently stale; both parse correctly and legitimately show 0 items on
+  // short lookbacks. They stay.
+  { group: 'topic', label: 'Psychology Today', url: 'https://www.psychologytoday.com/us/front/feed', enabled: true },
+  { group: 'topic', label: 'PsyPost', url: 'https://www.psypost.org/feed/', enabled: true },
+  { group: 'topic', label: 'ScienceDaily Mental Health', url: 'https://www.sciencedaily.com/rss/mind_brain/mental_health.xml', enabled: true },
+  { group: 'topic', label: 'Mental Health America', url: 'https://mhanational.org/blog/feed/', enabled: true },
+  // reddit rate-limits back-to-back requests from one IP; both ship disabled.
+  { group: 'topic', label: 'r/mentalhealth', url: 'https://www.reddit.com/r/mentalhealth/new/.rss', enabled: false },
+  { group: 'topic', label: 'r/therapy', url: 'https://www.reddit.com/r/therapy/new/.rss', enabled: false },
+  // TARGET - the items she actually reads.
+  { group: 'target', label: 'Know Your Meme', url: 'https://knowyourmeme.com/newsfeed.rss', enabled: true },
+  { group: 'target', label: 'Dexerto Entertainment', url: 'https://www.dexerto.com/entertainment/feed/', enabled: true },
+  { group: 'target', label: 'Social Media Today', url: 'https://www.socialmediatoday.com/feeds/news/', enabled: true },
+  { group: 'target', label: 'Social Media Examiner', url: 'https://www.socialmediaexaminer.com/feed/', enabled: true },
+  { group: 'target', label: 'Sprout Social', url: 'https://sproutsocial.com/insights/feed/', enabled: true },
+  { group: 'target', label: 'Hootsuite Blog', url: 'https://blog.hootsuite.com/feed/', enabled: true },
+  { group: 'target', label: 'Buffer Blog', url: 'https://buffer.com/resources/rss/', enabled: true },
+  { group: 'target', label: 'Influencer Marketing Hub', url: 'https://influencermarketinghub.com/feed/', enabled: true },
+  { group: 'target', label: 'Google Trends US', url: 'https://trends.google.com/trending/rss?geo=US', enabled: true },
 ]
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 10)
+}
+
+function coerceGroup(g: unknown): Group {
+  // Anything without an explicit topic marking defaults to target - applies
+  // to imports and to source lists stored by earlier versions of this tool.
+  return g === 'topic' ? 'topic' : 'target'
 }
 
 function defaultsWithIds(): Source[] {
@@ -101,6 +120,7 @@ function loadSources(): Source[] {
         label: s.label,
         url: s.url,
         enabled: s.enabled !== false,
+        group: coerceGroup((s as { group?: unknown }).group),
       }))
     return cleaned.length > 0 ? cleaned : defaultsWithIds()
   } catch {
@@ -155,7 +175,7 @@ const STOPWORDS = new Set([
   'https', 'href', 'nbsp',
 ])
 
-function extractCommonTerms(items: DigestItem[]): string[] {
+function extractCommonTerms(items: DigestItem[], limit: number): string[] {
   // Frequency across all occurrences, gated on appearing in at least 2
   // distinct items so a single verbose post cannot dominate. Words and
   // two-word bigrams both count; bigrams are usually the valuable ones.
@@ -193,7 +213,7 @@ function extractCommonTerms(items: DigestItem[]): string[] {
   return Array.from(freq.entries())
     .filter(([t]) => (itemCount.get(t) ?? 0) >= 2)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 15)
+    .slice(0, limit)
     .map(([t]) => t)
 }
 
@@ -252,16 +272,22 @@ export default function TrendwatchClient() {
     return (url: string) => m.get(url) ?? url
   }, [sources])
 
+  const groupFor = useMemo(() => {
+    const m = new Map<string, Group>()
+    for (const s of sources ?? []) m.set(s.url.trim(), s.group)
+    return (url: string) => m.get(url) ?? 'target'
+  }, [sources])
+
   function update(id: string, patch: Partial<Source>) {
     setSources((prev) =>
       (prev ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s))
     )
   }
 
-  function addSource() {
+  function addSource(group: Group) {
     setSources((prev) => [
       ...(prev ?? []),
-      { id: newId(), label: '', url: '', enabled: true },
+      { id: newId(), label: '', url: '', enabled: true, group },
     ])
   }
 
@@ -280,7 +306,12 @@ export default function TrendwatchClient() {
   function exportJson() {
     const data = JSON.stringify(
       {
-        sources: (sources ?? []).map(({ label, url, enabled }) => ({ label, url, enabled })),
+        sources: (sources ?? []).map(({ label, url, enabled, group }) => ({
+          label,
+          url,
+          enabled,
+          group,
+        })),
         filter,
         display: { compact, itemCap },
       },
@@ -309,7 +340,7 @@ export default function TrendwatchClient() {
         if (!Array.isArray(rawList)) throw new Error('no sources found in file')
         const imported: Source[] = rawList
           .filter(
-            (s): s is { label?: string; url?: string; enabled?: boolean } =>
+            (s): s is { label?: string; url?: string; enabled?: boolean; group?: unknown } =>
               !!s && typeof s === 'object' && typeof (s as { url?: unknown }).url === 'string'
           )
           .map((s) => ({
@@ -317,6 +348,7 @@ export default function TrendwatchClient() {
             label: typeof s.label === 'string' ? s.label : (s.url as string),
             url: s.url as string,
             enabled: s.enabled !== false,
+            group: coerceGroup(s.group),
           }))
         if (imported.length === 0) throw new Error('no sources found in file')
         setSources(imported)
@@ -383,20 +415,47 @@ export default function TrendwatchClient() {
     }
   }
 
+  // ── Stage 1: topic items supply vocabulary ─────────────────────────────────
+  const topicItems = useMemo(
+    () => items.filter((i) => groupFor(i.sourceUrl) === 'topic'),
+    [items, groupFor]
+  )
+  const targetItems = useMemo(
+    () => items.filter((i) => groupFor(i.sourceUrl) === 'target'),
+    [items, groupFor]
+  )
+
+  // Chips derive ONLY from topic sources. Recomputes per fetch (and on group
+  // reassignment), never per keystroke.
+  const commonTerms = useMemo(
+    () => extractCommonTerms(topicItems, CHIP_LIMIT),
+    [topicItems]
+  )
+  const activeTerms = useMemo(() => new Set(parseFilterTerms(filter)), [filter])
+
+  function toggleTerm(term: string) {
+    const terms = parseFilterTerms(filter)
+    const next = terms.includes(term)
+      ? terms.filter((t) => t !== term)
+      : [...terms, term]
+    patchPrefs({ filter: next.join(', ') })
+  }
+
+  // ── Stage 2: filter applies ONLY to target items ───────────────────────────
   // Pipeline: fetch -> keyword filter -> per-source cap. Capping before
   // filtering would throw away matches, so the order is load-bearing.
-  const filteredItems = useMemo(() => {
+  const filteredTargets = useMemo(() => {
     const terms = parseFilterTerms(filter)
-    if (terms.length === 0) return items
-    return items.filter((item) => {
+    if (terms.length === 0) return targetItems
+    return targetItems.filter((item) => {
       const hay = (item.title + ' ' + item.description).toLowerCase()
       return terms.some((t) => hay.includes(t))
     })
-  }, [items, filter])
+  }, [targetItems, filter])
 
   const cappedGroups = useMemo(() => {
     const groups = new Map<string, DigestItem[]>()
-    for (const item of filteredItems) {
+    for (const item of filteredTargets) {
       const list = groups.get(item.sourceUrl) ?? []
       list.push(item)
       groups.set(item.sourceUrl, list)
@@ -408,7 +467,7 @@ export default function TrendwatchClient() {
       total: group.length,
       visible: itemCap > 0 ? group.slice(0, itemCap) : group,
     }))
-  }, [filteredItems, itemCap])
+  }, [filteredTargets, itemCap])
 
   const visibleCount = useMemo(
     () => cappedGroups.reduce((n, g) => n + g.visible.length, 0),
@@ -416,34 +475,31 @@ export default function TrendwatchClient() {
   )
   const filterActive = parseFilterTerms(filter).length > 0
 
-  // Recomputes per fetch (items only changes then), never per keystroke, and
-  // always from ALL fetched items regardless of the current filter.
-  const commonTerms = useMemo(() => extractCommonTerms(items), [items])
-  const activeTerms = useMemo(() => new Set(parseFilterTerms(filter)), [filter])
-
-  function toggleTerm(term: string) {
-    const terms = parseFilterTerms(filter)
-    const next = terms.includes(term)
-      ? terms.filter((t) => t !== term)
-      : [...terms, term]
-    patchPrefs({ filter: next.join(', ') })
-  }
+  const topicSourceCount = useMemo(
+    () => new Set(topicItems.map((i) => i.sourceUrl)).size,
+    [topicItems]
+  )
+  const targetSourceCount = useMemo(
+    () => (results ?? []).filter((r) => groupFor(r.url) === 'target').length,
+    [results, groupFor]
+  )
 
   const digestText = useMemo(() => {
     if (visibleCount === 0) return ''
     const end = fetchedAt ?? new Date()
     const start = new Date(end.getTime() - sinceDays * 24 * 60 * 60 * 1000)
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
-    const okCount = (results ?? []).filter((r) => r.ok).length
     const lines: string[] = [
-      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${okCount} sources, ${visibleCount} items`,
-      '',
+      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${visibleCount} items from ${targetSourceCount} sources`,
     ]
-    // The digest matches what is on screen (filter + cap applied), with two
-    // deliberate exceptions - compact mode and collapsed sections are
-    // display-only. The digest always carries descriptions and every source:
-    // it is input for analysis elsewhere, and the descriptions are the
-    // substance.
+    const terms = parseFilterTerms(filter)
+    if (terms.length > 0) lines.push(`Filtered on: ${terms.join(', ')}`)
+    lines.push('')
+    // Target items only. The digest matches what is on screen (filter + cap
+    // applied), with two deliberate exceptions - compact mode and collapsed
+    // sections are display-only. The digest always carries descriptions and
+    // every source: it is input for analysis elsewhere, and the descriptions
+    // are the substance.
     for (const g of cappedGroups) {
       if (g.visible.length === 0) continue
       lines.push(`=== ${labelFor(g.url)} ===`)
@@ -458,7 +514,7 @@ export default function TrendwatchClient() {
       lines.push('')
     }
     return lines.join('\n').trimEnd() + '\n'
-  }, [cappedGroups, visibleCount, results, sinceDays, fetchedAt, labelFor])
+  }, [cappedGroups, visibleCount, targetSourceCount, sinceDays, fetchedAt, labelFor, filter])
 
   async function copyDigest() {
     try {
@@ -489,6 +545,67 @@ export default function TrendwatchClient() {
   const primaryBtnCls =
     'inline-flex items-center gap-1.5 rounded-md border border-[#5c4620] bg-[#5c4620] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#4a3819] disabled:opacity-70'
 
+  function sourceRows(group: Group, heading: string, sub: string) {
+    const list = (sources ?? []).filter((s) => s.group === group)
+    return (
+      <div className="mt-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-[#4a443a]">
+          {heading}
+        </h3>
+        <p className="text-xs text-[#6e6455]">{sub}</p>
+        <ul className="mt-2 space-y-2">
+          {list.map((s) => (
+            <li key={s.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={s.enabled}
+                onChange={(e) => update(s.id, { enabled: e.target.checked })}
+                className="h-4 w-4 accent-[#5c4620]"
+                title={s.enabled ? 'Enabled' : 'Disabled'}
+              />
+              <input
+                className={`${inputCls} w-44 shrink-0`}
+                value={s.label}
+                placeholder="Label"
+                onChange={(e) => update(s.id, { label: e.target.value })}
+              />
+              <input
+                className={`${inputCls} min-w-0 flex-1`}
+                value={s.url}
+                placeholder="https://example.com/feed.xml"
+                onChange={(e) => update(s.id, { url: e.target.value })}
+              />
+              <select
+                className={`${inputCls} shrink-0`}
+                value={s.group}
+                title="Topic sources supply filter vocabulary; target sources supply the items shown"
+                onChange={(e) => update(s.id, { group: coerceGroup(e.target.value) })}
+              >
+                <option value="topic">Topic</option>
+                <option value="target">Target</option>
+              </select>
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-[#7a4636] hover:bg-[#f3e5df]"
+                onClick={() => removeSource(s.id)}
+                title="Remove source"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className={`${btnCls} mt-2`}
+          onClick={() => addSource(group)}
+        >
+          <Plus size={14} /> Add {group} source
+        </button>
+      </div>
+    )
+  }
+
   return (
     <main
       className="min-h-screen bg-[#faf7f1] px-6 py-10 text-[#2a2620]"
@@ -497,9 +614,10 @@ export default function TrendwatchClient() {
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-semibold tracking-tight">Trendwatch</h1>
         <p className="mt-1 text-sm text-[#6e6455]">
-          Pull recent items from your feed list, then copy the digest into the
-          AI assistant of your choice for analysis. Sources are saved in this
-          browser only - export the JSON to share a list.
+          Topic sources supply vocabulary - target sources supply the items.
+          Fetch both, pick terms, copy the filtered digest into the AI
+          assistant of your choice for analysis. Everything is saved in this
+          browser only - export the JSON to share a setup.
         </p>
 
         {notice && (
@@ -536,42 +654,8 @@ export default function TrendwatchClient() {
             </div>
           </div>
 
-          <ul className="mt-3 space-y-2">
-            {(sources ?? []).map((s) => (
-              <li key={s.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={s.enabled}
-                  onChange={(e) => update(s.id, { enabled: e.target.checked })}
-                  className="h-4 w-4 accent-[#5c4620]"
-                  title={s.enabled ? 'Enabled' : 'Disabled'}
-                />
-                <input
-                  className={`${inputCls} w-44 shrink-0`}
-                  value={s.label}
-                  placeholder="Label"
-                  onChange={(e) => update(s.id, { label: e.target.value })}
-                />
-                <input
-                  className={`${inputCls} min-w-0 flex-1`}
-                  value={s.url}
-                  placeholder="https://example.com/feed.xml"
-                  onChange={(e) => update(s.id, { url: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="rounded-md p-1.5 text-[#7a4636] hover:bg-[#f3e5df]"
-                  onClick={() => removeSource(s.id)}
-                  title="Remove source"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className={`${btnCls} mt-3`} onClick={addSource}>
-            <Plus size={14} /> Add source
-          </button>
+          {sourceRows('topic', 'Topic sources', 'Vocabulary only - their items become suggested terms, never results.')}
+          {sourceRows('target', 'Target sources', 'The items shown and copied, filtered by the terms.')}
         </section>
 
         {/* B. Fetch */}
@@ -614,14 +698,16 @@ export default function TrendwatchClient() {
               id="keyword-filter"
               className={`${inputCls} min-w-0 flex-1`}
               value={filter}
-              placeholder="Comma-separated terms, e.g. video, algorithm, engagement"
+              placeholder="Comma-separated terms - applies to target items only"
               onChange={(e) => patchPrefs({ filter: e.target.value })}
             />
           </div>
 
           {commonTerms.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="text-sm text-[#6e6455]">Common terms</span>
+              <span className="text-sm text-[#6e6455]">
+                Topics from mental health sources
+              </span>
               {commonTerms.map((term) => {
                 const active = activeTerms.has(term)
                 return (
@@ -657,6 +743,9 @@ export default function TrendwatchClient() {
                     className={`inline-block h-2 w-2 shrink-0 translate-y-[-1px] rounded-full ${r.ok ? 'bg-[#3d6332]' : 'bg-[#9a3a24]'}`}
                   />
                   <span className="font-medium">{labelFor(r.url)}</span>
+                  <span className="text-xs uppercase text-[#6e6455]">
+                    {groupFor(r.url)}
+                  </span>
                   {r.ok ? (
                     <span className="text-[#3d6332]">
                       {r.itemCount} item{r.itemCount === 1 ? '' : 's'}
@@ -674,7 +763,7 @@ export default function TrendwatchClient() {
         <section className="mt-10 pb-16">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Digest</h2>
-            {items.length > 0 && (
+            {targetItems.length > 0 && (
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5 text-sm text-[#4a443a]">
                   <input
@@ -724,7 +813,12 @@ export default function TrendwatchClient() {
 
           {items.length > 0 && (
             <p className="mt-2 text-sm text-[#4a443a]">
-              Showing {visibleCount} of {items.length} items
+              {commonTerms.length} topic{commonTerms.length === 1 ? '' : 's'} from{' '}
+              {topicSourceCount} source{topicSourceCount === 1 ? '' : 's'} - showing{' '}
+              {visibleCount} of {targetItems.length} item
+              {targetItems.length === 1 ? '' : 's'} from {targetSourceCount} source
+              {targetSourceCount === 1 ? '' : 's'}
+              {!filterActive && targetItems.length > 0 && ' - nothing is filtered yet'}
             </p>
           )}
 
@@ -734,11 +828,19 @@ export default function TrendwatchClient() {
                 ? 'No items in the selected window.'
                 : 'Fetch to build a digest.'}
             </p>
+          ) : targetItems.length === 0 ? (
+            <p className="mt-3 rounded-md border border-[#e3d9c8] bg-[#f5efe3] px-3 py-2 text-sm text-[#4a443a]">
+              The fetch succeeded, but no target-source items are in the
+              selected window. Topic items supply vocabulary only and are not
+              shown here. Widen the lookback or enable more target sources.
+            </p>
           ) : visibleCount === 0 && filterActive ? (
             <p className="mt-3 rounded-md border border-[#e3d9c8] bg-[#f5efe3] px-3 py-2 text-sm text-[#4a443a]">
-              The fetch succeeded - {items.length} item
-              {items.length === 1 ? '' : 's'} retrieved - but no items match the
-              current filter. Clear or loosen the filter terms above to see them.
+              The fetch succeeded - {targetItems.length} target item
+              {targetItems.length === 1 ? '' : 's'} retrieved - but none match
+              the current filter. That is a real finding: mental health
+              vocabulary and social media vocabulary overlap less than you
+              would expect. Loosen or remove terms, or widen the lookback.
             </p>
           ) : (
             <>
