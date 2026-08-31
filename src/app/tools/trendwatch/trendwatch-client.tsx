@@ -7,11 +7,13 @@ import {
   ChevronRight,
   Copy,
   Download,
+  MessageSquare,
   Plus,
   RefreshCw,
   RotateCcw,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 
 // Trend digest tool, two-stage flow:
@@ -284,11 +286,101 @@ export default function TrendwatchClient() {
     )
   }
 
-  function addSource(group: Group) {
-    setSources((prev) => [
-      ...(prev ?? []),
-      { id: newId(), label: '', url: '', enabled: true, group },
-    ])
+  // ── Add-with-resolution: the user types anything ("later.com"), the server
+  // does the discovery. Validation happens on ADD, never per keystroke.
+  const [addInput, setAddInput] = useState<Record<Group, string>>({ topic: '', target: '' })
+  const [resolving, setResolving] = useState<Group | null>(null)
+
+  async function resolveAndAdd(group: Group) {
+    const input = addInput[group].trim()
+    if (!input || resolving !== null) return
+    setResolving(group)
+    try {
+      const res = await fetch('/tools/trendwatch/api/resolve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        feedUrl?: string
+        title?: string
+        message?: string
+        error?: string
+      }
+      if (data.ok && data.feedUrl) {
+        const feedUrl = data.feedUrl
+        const host = (() => {
+          try {
+            return new URL(feedUrl).hostname.replace(/^www\./, '')
+          } catch {
+            return feedUrl
+          }
+        })()
+        const label = data.title || host
+        setSources((prev) => [
+          ...(prev ?? []),
+          { id: newId(), label, url: feedUrl, enabled: true, group },
+        ])
+        const display = feedUrl.replace(/^https?:\/\//, '')
+        setNotice(feedUrl === input ? `Added ${display}` : `Found feed at ${display}`)
+        setAddInput((p) => ({ ...p, [group]: '' }))
+      } else {
+        setNotice(data.message ?? data.error ?? 'No feed found.')
+      }
+    } catch (e) {
+      setNotice(`Could not check that address - ${(e as Error).message}`)
+    } finally {
+      setResolving(null)
+    }
+  }
+
+  // ── Feedback panel state ───────────────────────────────────────────────────
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackStatus, setFeedbackStatus] = useState<
+    { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent' } | { kind: 'error'; message: string }
+  >({ kind: 'idle' })
+
+  async function sendFeedback() {
+    const message = feedbackText.trim()
+    if (!message || feedbackStatus.kind === 'sending') return
+    setFeedbackStatus({ kind: 'sending' })
+    try {
+      const res = await fetch('/tools/trendwatch/api/feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          // The state is what makes "this didn't work" actionable - collected
+          // automatically, nothing asked of the user.
+          state: {
+            sources: (sources ?? []).map(({ label, url, enabled, group }) => ({
+              label, url, enabled, group,
+            })),
+            filter,
+            lookbackDays: sinceDays,
+            itemCap,
+            lastFetch: (results ?? []).map((r) => ({
+              source: labelFor(r.url), ok: r.ok, itemCount: r.itemCount, error: r.error,
+            })),
+            fetchedAt: fetchedAt ? fetchedAt.toISOString() : null,
+          },
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null
+      if (res.ok && data?.ok) {
+        setFeedbackStatus({ kind: 'sent' })
+        setFeedbackText('')
+      } else {
+        setFeedbackStatus({
+          kind: 'error',
+          message: data?.error ?? `Send failed - HTTP ${res.status}`,
+        })
+      }
+    } catch (e) {
+      setFeedbackStatus({ kind: 'error', message: `Send failed - ${(e as Error).message}` })
+    }
   }
 
   function removeSource(id: string) {
@@ -595,13 +687,30 @@ export default function TrendwatchClient() {
             </li>
           ))}
         </ul>
-        <button
-          type="button"
-          className={`${btnCls} mt-2`}
-          onClick={() => addSource(group)}
-        >
-          <Plus size={14} /> Add {group} source
-        </button>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            className={`${inputCls} min-w-0 flex-1`}
+            value={addInput[group]}
+            placeholder="Add a site or feed URL - e.g. example.com"
+            onChange={(e) => setAddInput((p) => ({ ...p, [group]: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') resolveAndAdd(group)
+            }}
+          />
+          <button
+            type="button"
+            className={btnCls}
+            onClick={() => resolveAndAdd(group)}
+            disabled={resolving !== null || !addInput[group].trim()}
+          >
+            {resolving === group ? (
+              <RefreshCw size={14} className="animate-spin" />
+            ) : (
+              <Plus size={14} />
+            )}
+            {resolving === group ? 'Checking…' : 'Add'}
+          </button>
+        </div>
       </div>
     )
   }
@@ -915,6 +1024,71 @@ export default function TrendwatchClient() {
             </>
           )}
         </section>
+      </div>
+
+      {/* Feedback - small, persistent, bottom-right. State rides along
+          automatically; the only thing asked of the user is the note. */}
+      <div className="fixed bottom-4 right-4 z-50">
+        {feedbackOpen ? (
+          <div className="w-80 rounded-lg border border-[#c9bda9] bg-white p-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-[#2a2620]">Send feedback</span>
+              <button
+                type="button"
+                className="rounded-md p-1 text-[#4a443a] hover:bg-[#f3ede2]"
+                onClick={() => {
+                  setFeedbackOpen(false)
+                  setFeedbackStatus({ kind: 'idle' })
+                }}
+                title="Close"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <textarea
+              className={`${inputCls} mt-2 h-28 w-full resize-none`}
+              value={feedbackText}
+              placeholder="What happened, or what would help?"
+              onChange={(e) => setFeedbackText(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-[#6e6455]">
+              Your source list, filter, lookback, and last fetch results are
+              included automatically so this is actionable.
+            </p>
+            {feedbackStatus.kind === 'sent' && (
+              <p className="mt-2 rounded-md border border-[#a8c49b] bg-[#eef4ea] px-2 py-1.5 text-sm font-medium text-[#3d6332]">
+                Sent - thank you.
+              </p>
+            )}
+            {feedbackStatus.kind === 'error' && (
+              <p className="mt-2 rounded-md border border-[#c99b8f] bg-[#f7e9e5] px-2 py-1.5 text-sm font-medium text-[#8f3520]">
+                {feedbackStatus.message}
+              </p>
+            )}
+            <button
+              type="button"
+              className={`${primaryBtnCls} mt-2 w-full justify-center`}
+              onClick={sendFeedback}
+              disabled={feedbackStatus.kind === 'sending' || !feedbackText.trim()}
+            >
+              {feedbackStatus.kind === 'sending' ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : (
+                <MessageSquare size={14} />
+              )}
+              {feedbackStatus.kind === 'sending' ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#c9bda9] bg-white px-3 py-2 text-sm font-medium text-[#2a2620] shadow-md hover:bg-[#f3ede2]"
+            onClick={() => setFeedbackOpen(true)}
+            title="Send feedback"
+          >
+            <MessageSquare size={15} /> Feedback
+          </button>
+        )}
       </div>
     </main>
   )
