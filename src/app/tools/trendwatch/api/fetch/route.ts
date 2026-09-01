@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 
@@ -9,8 +10,13 @@ import Parser from 'rss-parser'
 // own ok/error.
 
 export const runtime = 'nodejs'
+// Watched pages are heavier than feeds; give the function explicit headroom
+// on the Pro plan rather than relying on the default.
+export const maxDuration = 60
 
 const FEED_TIMEOUT_MS = 6000
+const PAGE_TIMEOUT_MS = 10000
+const MAX_PAGES = 10
 const GLOBAL_BUDGET_MS = 8000
 const MIN_FEED_BUDGET_MS = 750
 const CONCURRENCY = 8
@@ -74,6 +80,157 @@ function normalizeLink(link: string): string {
     return link.trim().toLowerCase()
   }
 }
+
+// ── Watched pages ─────────────────────────────────────────────────────────
+// Trend content is often a living article that gets refreshed in place; RSS
+// cannot see that. A watched page is fetched as HTML, the main content region
+// is chosen heuristically (no dependency: <article>, else <main>, else the
+// stripped body), and its h2/h3 headings are extracted - on a trend listicle
+// the headings ARE the trends. The client owns baselines and change
+// detection; this handler just reports current content + a stable hash.
+
+export type PageResult = {
+  url: string
+  ok: boolean
+  title: string
+  headings: string[]
+  contentHash: string
+  extractedFrom: 'article' | 'main' | 'body'
+  error: string | null
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;|&apos;|&#8217;/g, "'")
+    .replace(/&quot;|&#8220;|&#8221;/g, '"')
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => {
+      try {
+        return String.fromCodePoint(parseInt(n, 16))
+      } catch {
+        return ' '
+      }
+    })
+    .replace(/&#(\d+);/g, (_, n) => {
+      try {
+        return String.fromCodePoint(Number(n))
+      } catch {
+        return ' '
+      }
+    })
+}
+
+function extractPage(html: string): {
+  title: string
+  headings: string[]
+  contentHash: string
+  extractedFrom: 'article' | 'main' | 'body'
+} {
+  const title = decodeEntities(
+    (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
+      html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+      '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
+
+  // Remove non-content blocks before choosing a region.
+  let cleaned = html
+  for (const tag of ['script', 'style', 'noscript', 'template', 'svg',
+                     'nav', 'header', 'footer', 'aside', 'form']) {
+    cleaned = cleaned.replace(
+      new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi'),
+      ' '
+    )
+  }
+
+  // Region preference: <article> (largest when several), then <main>, then
+  // the whole cleaned body - but a region only wins if it actually holds
+  // content. Real pages ship decorative <article> shells (socialbee's is
+  // 2.3KB with zero headings while the trends live outside it), so each
+  // candidate must contain at least one h2/h3 and substantial text or the
+  // next one is tried.
+  const headingCount = (s: string) =>
+    (s.match(/<h[23]\b/gi) ?? []).length
+  const textLen = (s: string) =>
+    s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
+  const candidates: { html: string; from: 'article' | 'main' | 'body' }[] = []
+  const articles = cleaned.match(/<article\b[\s\S]*?<\/article>/gi) ?? []
+  if (articles.length > 0) {
+    candidates.push({
+      html: articles.reduce((a, b) => (b.length > a.length ? b : a), ''),
+      from: 'article',
+    })
+  }
+  const main = cleaned.match(/<main\b[\s\S]*?<\/main>/i)?.[0]
+  if (main) candidates.push({ html: main, from: 'main' })
+  candidates.push({ html: cleaned, from: 'body' })
+
+  const chosen =
+    candidates.find((c) => headingCount(c.html) > 0 && textLen(c.html) > 500) ??
+    candidates[candidates.length - 1]
+  const region = chosen.html
+  const extractedFrom = chosen.from
+
+  const headings: string[] = []
+  const seen = new Set<string>()
+  for (const m of region.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)) {
+    const text = decodeEntities(m[2].replace(/<[^>]*>/g, ' '))
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!text || text.length > 200) continue
+    const key = text.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    headings.push(text)
+    if (headings.length >= 60) break
+  }
+
+  const contentText = region.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  const contentHash = createHash('sha256').update(contentText).digest('hex')
+
+  return { title, headings, contentHash, extractedFrom }
+}
+
+async function fetchOnePage(url: string): Promise<PageResult> {
+  const result: PageResult = {
+    url, ok: false, title: '', headings: [], contentHash: '',
+    extractedFrom: 'body', error: null,
+  }
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'user-agent': USER_AGENT,
+        accept: 'text/html, application/xhtml+xml, */*;q=0.8',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      result.error = `HTTP ${res.status}`
+      return result
+    }
+    const html = await res.text()
+    const extracted = extractPage(html)
+    result.ok = true
+    result.title = extracted.title
+    result.headings = extracted.headings
+    result.contentHash = extracted.contentHash
+    result.extractedFrom = extracted.extractedFrom
+  } catch (e) {
+    const err = e as Error
+    result.error =
+      err.name === 'TimeoutError' || err.name === 'AbortError'
+        ? `timed out after ${Math.round(PAGE_TIMEOUT_MS / 1000)}s`
+        : err.message || String(e)
+  }
+  return result
+}
+
 
 async function fetchOneFeed(
   url: string,
@@ -145,27 +302,31 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 })
   }
-  const { urls, sinceDays } = (body ?? {}) as {
+  const { urls, pages, sinceDays } = (body ?? {}) as {
     urls?: unknown
+    pages?: unknown
     sinceDays?: unknown
   }
-  if (!Array.isArray(urls) || urls.length === 0) {
-    return NextResponse.json(
-      { error: 'urls must be a non-empty array' },
-      { status: 400 }
-    )
-  }
-  const cleanUrls = urls
+  const cleanUrls = (Array.isArray(urls) ? urls : [])
     .filter((u): u is string => typeof u === 'string')
     .map((u) => u.trim())
     .filter((u) => /^https?:\/\//i.test(u))
     .slice(0, MAX_FEEDS)
-  if (cleanUrls.length === 0) {
+  const cleanPages = (Array.isArray(pages) ? pages : [])
+    .filter((u): u is string => typeof u === 'string')
+    .map((u) => u.trim())
+    .filter((u) => /^https?:\/\//i.test(u))
+    .slice(0, MAX_PAGES)
+  if (cleanUrls.length === 0 && cleanPages.length === 0) {
     return NextResponse.json(
       { error: 'no valid http(s) urls supplied' },
       { status: 400 }
     )
   }
+  // Watched pages run concurrently with the feed pool; each has its own 10s
+  // timeout and the count is capped, so worst case stays well inside
+  // maxDuration.
+  const pagesPromise = Promise.all(cleanPages.map(fetchOnePage))
   const days =
     typeof sinceDays === 'number' && Number.isFinite(sinceDays)
       ? Math.min(Math.max(Math.round(sinceDays), 1), 30)
@@ -231,9 +392,12 @@ export async function POST(request: Request) {
       byUrl.get(u) ?? { url: u, ok: false, itemCount: 0, error: 'not attempted' }
   )
 
+  const pageResults = await pagesPromise
+
   return NextResponse.json({
     results: ordered,
     items: deduped,
+    pageResults,
     sinceDays: days,
     elapsedMs: Date.now() - startedAt,
   })

@@ -31,6 +31,31 @@ const NO_FEED_MESSAGE =
 
 const parser = new Parser()
 
+function pathSegments(u: string): string[] {
+  try {
+    const url = new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`)
+    return url.pathname.split('/').filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+// Deep-page inputs get an honest answer instead of a quiet substitution: a
+// single evergreen article usually declares the SITE-WIDE feed in its head,
+// and silently adding that delivers the whole marketing blog when the user
+// asked about one page. Rule: typed path of 2+ segments resolving to a feed
+// nearer the site root is site-level - offer it, do not auto-add.
+function isSiteLevelFeed(typedInput: string, feedUrl: string): boolean {
+  const typed = pathSegments(typedInput)
+  if (typed.length < 2) return false
+  const feed = pathSegments(feedUrl)
+  const feedDir =
+    feed.length > 0 && feed[feed.length - 1].includes('.')
+      ? feed.length - 1 // strip the filename (rss.xml, feed.xml)
+      : feed.length
+  return typed.length > feedDir
+}
+
 type Attempt = {
   remaining: () => number
   count: { n: number }
@@ -134,11 +159,14 @@ export async function POST(request: Request) {
       // 1) The typed URL is itself a feed.
       const direct = await parsesAsFeed(page.text)
       if (direct) {
+        // The typed URL parsed as a feed itself - by definition the feed FOR
+        // what she typed, never site-level.
         return NextResponse.json({
           ok: true,
           feedUrl: page.finalUrl,
           title: direct.title,
           resolvedFrom: input,
+          siteLevel: false,
         })
       }
       // 2) HTML page - follow its advertised feed links.
@@ -152,6 +180,7 @@ export async function POST(request: Request) {
             feedUrl: candidate.finalUrl,
             title: feed.title,
             resolvedFrom: input,
+            siteLevel: isSiteLevelFeed(input, candidate.finalUrl),
           })
         }
       }
@@ -167,6 +196,7 @@ export async function POST(request: Request) {
           feedUrl: candidate.finalUrl,
           title: feed.title,
           resolvedFrom: input,
+          siteLevel: isSiteLevelFeed(input, candidate.finalUrl),
         })
       }
     }

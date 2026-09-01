@@ -27,6 +27,7 @@ import {
 // formats, something else does the thinking.
 
 type Group = 'topic' | 'target'
+type Kind = 'feed' | 'page'
 
 type Source = {
   id: string
@@ -34,7 +35,28 @@ type Source = {
   url: string
   enabled: boolean
   group: Group
+  kind: Kind
 }
+
+type PageResult = {
+  url: string
+  ok: boolean
+  title: string
+  headings: string[]
+  contentHash: string
+  extractedFrom: 'article' | 'main' | 'body'
+  error: string | null
+}
+
+type PageReport = PageResult & {
+  status: 'first' | 'unchanged' | 'changed' | 'error'
+  newHeadings: string[]
+}
+
+type WatchBaseline = Record<
+  string,
+  { hash: string; headings: string[]; checkedAt: string }
+>
 
 type FeedResult = {
   url: string
@@ -61,11 +83,13 @@ type Prefs = {
 
 const STORAGE_KEY = 'ibh-trendwatch-sources-v1'
 const PREFS_KEY = 'ibh-trendwatch-prefs-v1'
+const WATCH_KEY = 'ibh-trendwatch-watch-v1'
 const CHIP_LIMIT = 20
+const MAX_WATCHED_PAGES = 10
 
 const DEFAULT_PREFS: Prefs = { filter: '', compact: true, itemCap: 5, collapsed: [] }
 
-const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
+const DEFAULT_SOURCES: Omit<Source, 'id' | 'kind'>[] = [
   // TOPIC - vocabulary suppliers.
   // ScienceDaily publishes ~4 items/month and Mental Health America's feed is
   // currently stale; both parse correctly and legitimately show 0 items on
@@ -87,6 +111,7 @@ const DEFAULT_SOURCES: Omit<Source, 'id'>[] = [
   { group: 'target', label: 'Buffer Blog', url: 'https://buffer.com/resources/rss/', enabled: true },
   { group: 'target', label: 'Influencer Marketing Hub', url: 'https://influencermarketinghub.com/feed/', enabled: true },
   { group: 'target', label: 'Google Trends US', url: 'https://trends.google.com/trending/rss?geo=US', enabled: true },
+  { group: 'target', label: 'New Engen', url: 'https://newengen.com/feed.xml', enabled: true },
 ]
 
 function newId(): string {
@@ -99,8 +124,13 @@ function coerceGroup(g: unknown): Group {
   return g === 'topic' ? 'topic' : 'target'
 }
 
+function coerceKind(k: unknown): Kind {
+  // Sources without a kind (older stored lists, older exports) are feeds.
+  return k === 'page' ? 'page' : 'feed'
+}
+
 function defaultsWithIds(): Source[] {
-  return DEFAULT_SOURCES.map((s) => ({ ...s, id: newId() }))
+  return DEFAULT_SOURCES.map((s) => ({ ...s, id: newId(), kind: 'feed' as Kind }))
 }
 
 function loadSources(): Source[] {
@@ -123,10 +153,22 @@ function loadSources(): Source[] {
         url: s.url,
         enabled: s.enabled !== false,
         group: coerceGroup((s as { group?: unknown }).group),
+        kind: coerceKind((s as { kind?: unknown }).kind),
       }))
     return cleaned.length > 0 ? cleaned : defaultsWithIds()
   } catch {
     return defaultsWithIds()
+  }
+}
+
+function loadWatchBaselines(): WatchBaseline {
+  try {
+    const raw = window.localStorage.getItem(WATCH_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as WatchBaseline
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
   }
 }
 
@@ -231,13 +273,26 @@ export default function TrendwatchClient() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [pageReports, setPageReports] = useState<PageReport[]>([])
+  const [watchBase, setWatchBase] = useState<WatchBaseline | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   // localStorage is browser-only - hydrate after mount.
   useEffect(() => {
     setSources(loadSources())
     setPrefs(loadPrefs())
+    setWatchBase(loadWatchBaselines())
   }, [])
+
+  useEffect(() => {
+    if (watchBase !== null) {
+      try {
+        window.localStorage.setItem(WATCH_KEY, JSON.stringify(watchBase))
+      } catch {
+        // Storage full or blocked - change detection degrades, page still works.
+      }
+    }
+  }, [watchBase])
 
   useEffect(() => {
     if (sources !== null) {
@@ -290,6 +345,63 @@ export default function TrendwatchClient() {
   // does the discovery. Validation happens on ADD, never per keystroke.
   const [addInput, setAddInput] = useState<Record<Group, string>>({ topic: '', target: '' })
   const [resolving, setResolving] = useState<Group | null>(null)
+  // Site-level feed found for a deep-path input, or no feed found at all -
+  // both become an explicit choice instead of a silent outcome.
+  const [pending, setPending] = useState<{
+    group: Group
+    typed: string
+    feedUrl: string | null // null = no feed found; watch is the only offer
+    feedTitle: string
+  } | null>(null)
+
+  function normalizeTypedUrl(typed: string): string {
+    return /^https?:\/\//i.test(typed) ? typed : `https://${typed}`
+  }
+
+  function watchedPageCount(): number {
+    return (sources ?? []).filter((s) => s.kind === 'page').length
+  }
+
+  function addResolvedFeed(group: Group, feedUrl: string, title: string) {
+    const host = (() => {
+      try {
+        return new URL(feedUrl).hostname.replace(/^www\./, '')
+      } catch {
+        return feedUrl
+      }
+    })()
+    setSources((prev) => [
+      ...(prev ?? []),
+      { id: newId(), label: title || host, url: feedUrl, enabled: true, group, kind: 'feed' },
+    ])
+  }
+
+  function addWatchedPage(group: Group, typed: string) {
+    if (watchedPageCount() >= MAX_WATCHED_PAGES) {
+      setNotice(`Watched pages are capped at ${MAX_WATCHED_PAGES} - remove one first.`)
+      setPending(null)
+      return
+    }
+    const url = normalizeTypedUrl(typed)
+    const label = (() => {
+      try {
+        const u = new URL(url)
+        const tail = u.pathname.split('/').filter(Boolean).pop()
+        return tail
+          ? `${u.hostname.replace(/^www\./, '')} - ${tail.replace(/[-_]/g, ' ')}`
+          : u.hostname.replace(/^www\./, '')
+      } catch {
+        return typed
+      }
+    })()
+    setSources((prev) => [
+      ...(prev ?? []),
+      { id: newId(), label, url, enabled: true, group, kind: 'page' },
+    ])
+    setNotice(`Watching ${url.replace(/^https?:\/\//, '')} - headings are checked for changes on each fetch.`)
+    setPending(null)
+    setAddInput((p) => ({ ...p, [group]: '' }))
+  }
 
   async function resolveAndAdd(group: Group) {
     const input = addInput[group].trim()
@@ -305,28 +417,35 @@ export default function TrendwatchClient() {
         ok?: boolean
         feedUrl?: string
         title?: string
+        siteLevel?: boolean
         message?: string
         error?: string
       }
       if (data.ok && data.feedUrl) {
-        const feedUrl = data.feedUrl
-        const host = (() => {
-          try {
-            return new URL(feedUrl).hostname.replace(/^www\./, '')
-          } catch {
-            return feedUrl
-          }
-        })()
-        const label = data.title || host
-        setSources((prev) => [
-          ...(prev ?? []),
-          { id: newId(), label, url: feedUrl, enabled: true, group },
-        ])
-        const display = feedUrl.replace(/^https?:\/\//, '')
-        setNotice(feedUrl === input ? `Added ${display}` : `Found feed at ${display}`)
-        setAddInput((p) => ({ ...p, [group]: '' }))
+        if (data.siteLevel) {
+          // A deep page resolving to the site's root feed is NOT the feed for
+          // that page. Offer, label honestly, make her choose - never auto-add.
+          setPending({
+            group,
+            typed: input,
+            feedUrl: data.feedUrl,
+            feedTitle: data.title ?? '',
+          })
+        } else {
+          addResolvedFeed(group, data.feedUrl, data.title ?? '')
+          const display = data.feedUrl.replace(/^https?:\/\//, '')
+          setNotice(data.feedUrl === input ? `Added ${display}` : `Found feed at ${display}`)
+          setAddInput((p) => ({ ...p, [group]: '' }))
+        }
       } else {
-        setNotice(data.message ?? data.error ?? 'No feed found.')
+        // No feed anywhere - offer to watch the page instead when the input
+        // is URL-shaped.
+        const watchable = /^[^\s]+\.[^\s]{2,}/.test(input)
+        if (watchable) {
+          setPending({ group, typed: input, feedUrl: null, feedTitle: '' })
+        } else {
+          setNotice(data.message ?? data.error ?? 'No feed found.')
+        }
       }
     } catch (e) {
       setNotice(`Could not check that address - ${(e as Error).message}`)
@@ -391,6 +510,8 @@ export default function TrendwatchClient() {
     if (window.confirm('Replace the current source list and preferences with the defaults?')) {
       setSources(defaultsWithIds())
       setPrefs({ ...DEFAULT_PREFS })
+      setWatchBase({})
+      setPageReports([])
       setNotice('Source list and preferences reset to defaults.')
     }
   }
@@ -398,14 +519,18 @@ export default function TrendwatchClient() {
   function exportJson() {
     const data = JSON.stringify(
       {
-        sources: (sources ?? []).map(({ label, url, enabled, group }) => ({
+        sources: (sources ?? []).map(({ label, url, enabled, group, kind }) => ({
           label,
           url,
           enabled,
           group,
+          kind,
         })),
         filter,
         display: { compact, itemCap },
+        // Watched-page baselines travel with the setup so change detection
+        // survives a hand-off or a reset+import round trip.
+        watch: watchBase ?? {},
       },
       null,
       2
@@ -441,6 +566,7 @@ export default function TrendwatchClient() {
             url: s.url as string,
             enabled: s.enabled !== false,
             group: coerceGroup(s.group),
+            kind: coerceKind((s as { kind?: unknown }).kind),
           }))
         if (imported.length === 0) throw new Error('no sources found in file')
         setSources(imported)
@@ -448,6 +574,10 @@ export default function TrendwatchClient() {
           const obj = parsed as {
             filter?: unknown
             display?: { compact?: unknown; itemCap?: unknown }
+            watch?: unknown
+          }
+          if (obj.watch && typeof obj.watch === 'object') {
+            setWatchBase(obj.watch as WatchBaseline)
           }
           patchPrefs({
             ...(typeof obj.filter === 'string' ? { filter: obj.filter } : {}),
@@ -471,7 +601,12 @@ export default function TrendwatchClient() {
     const enabled = (sources ?? []).filter(
       (s) => s.enabled && /^https?:\/\//i.test(s.url.trim())
     )
-    if (enabled.length === 0) {
+    const feedUrls = enabled.filter((s) => s.kind === 'feed').map((s) => s.url.trim())
+    const pageUrls = enabled
+      .filter((s) => s.kind === 'page')
+      .map((s) => s.url.trim())
+      .slice(0, MAX_WATCHED_PAGES)
+    if (feedUrls.length === 0 && pageUrls.length === 0) {
       setFetchError('No enabled sources with a valid http(s) URL.')
       return
     }
@@ -482,10 +617,7 @@ export default function TrendwatchClient() {
       const res = await fetch('/tools/trendwatch/api/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          urls: enabled.map((s) => s.url.trim()),
-          sinceDays,
-        }),
+        body: JSON.stringify({ urls: feedUrls, pages: pageUrls, sinceDays }),
       })
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null
@@ -494,12 +626,41 @@ export default function TrendwatchClient() {
       const data = (await res.json()) as {
         results: FeedResult[]
         items: DigestItem[]
+        pageResults?: PageResult[]
         elapsedMs: number
       }
       setResults(data.results)
       setItems(data.items)
       setElapsedMs(data.elapsedMs)
       setFetchedAt(new Date())
+
+      // Change detection for watched pages: compare against the stored
+      // baseline, surface what is NEW, then advance the baseline.
+      const base = watchBase ?? {}
+      const nextBase: WatchBaseline = { ...base }
+      const reports: PageReport[] = (data.pageResults ?? []).map((p) => {
+        if (!p.ok) return { ...p, status: 'error' as const, newHeadings: [] }
+        const prev = base[p.url]
+        let status: PageReport['status']
+        let newHeadings: string[] = []
+        if (!prev) {
+          status = 'first'
+        } else if (prev.hash === p.contentHash) {
+          status = 'unchanged'
+        } else {
+          status = 'changed'
+          const prevSet = new Set(prev.headings.map((h) => h.toLowerCase()))
+          newHeadings = p.headings.filter((h) => !prevSet.has(h.toLowerCase()))
+        }
+        nextBase[p.url] = {
+          hash: p.contentHash,
+          headings: p.headings,
+          checkedAt: new Date().toISOString(),
+        }
+        return { ...p, status, newHeadings }
+      })
+      setPageReports(reports)
+      setWatchBase(nextBase)
     } catch (e) {
       setFetchError((e as Error).message)
     } finally {
@@ -576,13 +737,34 @@ export default function TrendwatchClient() {
     [results, groupFor]
   )
 
+  // Watched-page headings pass through the same keyword filter as feed item
+  // titles. A page with no matching headings drops out of display and digest.
+  const visiblePages = useMemo(() => {
+    const terms = parseFilterTerms(filter)
+    return pageReports
+      .filter((p) => p.ok)
+      .map((p) => ({
+        ...p,
+        visibleHeadings:
+          terms.length === 0
+            ? p.headings
+            : p.headings.filter((h) =>
+                terms.some((t) => h.toLowerCase().includes(t))
+              ),
+      }))
+      .filter((p) => p.visibleHeadings.length > 0)
+  }, [pageReports, filter])
+
   const digestText = useMemo(() => {
-    if (visibleCount === 0) return ''
+    if (visibleCount === 0 && visiblePages.length === 0) return ''
     const end = fetchedAt ?? new Date()
     const start = new Date(end.getTime() - sinceDays * 24 * 60 * 60 * 1000)
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
     const lines: string[] = [
-      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${visibleCount} items from ${targetSourceCount} sources`,
+      `Trend digest - ${fmt(start)} to ${fmt(end)} - ${visibleCount} items from ${targetSourceCount} sources` +
+        (visiblePages.length > 0
+          ? ` - ${visiblePages.length} watched page${visiblePages.length === 1 ? '' : 's'}`
+          : ''),
     ]
     const terms = parseFilterTerms(filter)
     if (terms.length > 0) lines.push(`Filtered on: ${terms.join(', ')}`)
@@ -605,8 +787,21 @@ export default function TrendwatchClient() {
       }
       lines.push('')
     }
+    // Watched pages: title, URL, headings with new ones flagged - high-value
+    // context for downstream analysis.
+    for (const p of visiblePages) {
+      const newSet = new Set(p.newHeadings.map((h) => h.toLowerCase()))
+      lines.push(`=== Watched: ${p.title || labelFor(p.url)} ===`)
+      lines.push(p.url)
+      if (p.status === 'unchanged') lines.push('(no change since last check)')
+      if (p.status === 'first') lines.push('(first check - no baseline yet)')
+      for (const h of p.visibleHeadings) {
+        lines.push(`- ${h}${newSet.has(h.toLowerCase()) ? ' [NEW]' : ''}`)
+      }
+      lines.push('')
+    }
     return lines.join('\n').trimEnd() + '\n'
-  }, [cappedGroups, visibleCount, targetSourceCount, sinceDays, fetchedAt, labelFor, filter])
+  }, [cappedGroups, visibleCount, targetSourceCount, sinceDays, fetchedAt, labelFor, filter, visiblePages])
 
   async function copyDigest() {
     try {
@@ -735,6 +930,60 @@ export default function TrendwatchClient() {
           </p>
         )}
 
+        {pending && (
+          <div className="mt-4 rounded-md border border-[#d9c9a8] bg-[#f5efe3] px-3 py-2.5 text-sm text-[#2a2620]">
+            {pending.feedUrl ? (
+              <p>
+                <span className="font-medium">{pending.typed}</span> does not
+                publish its own feed. The site-wide feed at{' '}
+                <span className="font-medium">
+                  {pending.feedUrl.replace(/^https?:\/\//, '')}
+                </span>{' '}
+                is available instead - it covers the whole site rather than
+                this page. Add it anyway?
+              </p>
+            ) : (
+              <p>
+                No feed found for{' '}
+                <span className="font-medium">{pending.typed}</span> - many
+                sites no longer publish one. You can watch the page itself:
+                its headings are captured on each fetch and changes are
+                flagged.
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {pending.feedUrl && (
+                <button
+                  type="button"
+                  className={btnCls}
+                  onClick={() => {
+                    addResolvedFeed(pending.group, pending.feedUrl as string, pending.feedTitle)
+                    setNotice(`Added site-wide feed ${(pending.feedUrl as string).replace(/^https?:\/\//, '')}`)
+                    setPending(null)
+                    setAddInput((p) => ({ ...p, [pending.group]: '' }))
+                  }}
+                >
+                  Add site feed anyway
+                </button>
+              )}
+              <button
+                type="button"
+                className={primaryBtnCls}
+                onClick={() => addWatchedPage(pending.group, pending.typed)}
+              >
+                Watch this page instead
+              </button>
+              <button
+                type="button"
+                className={btnCls}
+                onClick={() => setPending(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* A. Sources */}
         <section className="mt-8">
           <div className="flex items-center justify-between">
@@ -844,9 +1093,9 @@ export default function TrendwatchClient() {
             </p>
           )}
 
-          {results && (
+          {(results || pageReports.length > 0) && (
             <ul className="mt-4 space-y-1">
-              {results.map((r) => (
+              {(results ?? []).map((r) => (
                 <li key={r.url} className="flex items-baseline gap-2 text-sm">
                   <span
                     className={`inline-block h-2 w-2 shrink-0 translate-y-[-1px] rounded-full ${r.ok ? 'bg-[#3d6332]' : 'bg-[#9a3a24]'}`}
@@ -864,6 +1113,25 @@ export default function TrendwatchClient() {
                   )}
                 </li>
               ))}
+              {pageReports.map((p) => (
+                <li key={p.url} className="flex items-baseline gap-2 text-sm">
+                  <span
+                    className={`inline-block h-2 w-2 shrink-0 translate-y-[-1px] rounded-full ${p.ok ? 'bg-[#3d6332]' : 'bg-[#9a3a24]'}`}
+                  />
+                  <span className="font-medium">{p.title || labelFor(p.url)}</span>
+                  <span className="text-xs uppercase text-[#6e6455]">watched page</span>
+                  {p.ok ? (
+                    <span className="text-[#3d6332]">
+                      {p.headings.length} heading{p.headings.length === 1 ? '' : 's'}
+                      {p.status === 'changed' && ` - ${p.newHeadings.length} new`}
+                      {p.status === 'unchanged' && ' - no change'}
+                      {p.status === 'first' && ' - first check'}
+                    </span>
+                  ) : (
+                    <span className="font-medium text-[#9a3a24]">failed - {p.error}</span>
+                  )}
+                </li>
+              ))}
             </ul>
           )}
         </section>
@@ -872,7 +1140,7 @@ export default function TrendwatchClient() {
         <section className="mt-10 pb-16">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Digest</h2>
-            {targetItems.length > 0 && (
+            {(targetItems.length > 0 || pageReports.length > 0) && (
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5 text-sm text-[#4a443a]">
                   <input
@@ -910,7 +1178,7 @@ export default function TrendwatchClient() {
                 >
                   Expand all
                 </button>
-                {visibleCount > 0 && (
+                {(visibleCount > 0 || visiblePages.length > 0) && (
                   <button type="button" className={primaryBtnCls} onClick={copyDigest}>
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                     {copied ? 'Copied' : 'Copy digest'}
@@ -927,23 +1195,72 @@ export default function TrendwatchClient() {
               {visibleCount} of {targetItems.length} item
               {targetItems.length === 1 ? '' : 's'} from {targetSourceCount} source
               {targetSourceCount === 1 ? '' : 's'}
+              {pageReports.length > 0 &&
+                ` - ${pageReports.length} watched page${pageReports.length === 1 ? '' : 's'}`}
               {!filterActive && targetItems.length > 0 && ' - nothing is filtered yet'}
             </p>
           )}
 
-          {items.length === 0 ? (
+          {/* Watched pages - their own visually distinct groups. Headings ARE
+              the trends on a listicle; new ones since the last check are
+              flagged. */}
+          {visiblePages.length > 0 && (
+            <div className="mt-4 space-y-4">
+              {visiblePages.map((p) => {
+                const newSet = new Set(p.newHeadings.map((h) => h.toLowerCase()))
+                return (
+                  <div
+                    key={p.url}
+                    className="rounded-lg border border-dashed border-[#b09a72] bg-[#f8f4ea] p-3"
+                  >
+                    <p className="text-sm font-semibold uppercase tracking-wide text-[#4a443a]">
+                      <span className="mr-1.5 rounded bg-[#5c4620] px-1.5 py-0.5 text-xs font-medium normal-case text-white">
+                        watched
+                      </span>
+                      {p.title || labelFor(p.url)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#6e6455]">
+                      <a href={p.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                        {p.url.replace(/^https?:\/\//, '')}
+                      </a>
+                      {' · '}
+                      {p.status === 'first' && 'first check - no baseline yet'}
+                      {p.status === 'unchanged' && 'no change since last check'}
+                      {p.status === 'changed' &&
+                        `changed - ${p.newHeadings.length} new heading${p.newHeadings.length === 1 ? '' : 's'}`}
+                      {' · '}extracted from {'<'}{p.extractedFrom}{'>'}
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {p.visibleHeadings.map((h) => (
+                        <li key={h} className="text-sm text-[#2a2620]">
+                          {newSet.has(h.toLowerCase()) && (
+                            <span className="mr-1.5 rounded bg-[#3d6332] px-1.5 py-0.5 text-xs font-medium text-white">
+                              NEW
+                            </span>
+                          )}
+                          {h}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {items.length === 0 && pageReports.length === 0 ? (
             <p className="mt-3 text-sm text-[#6e6455]">
               {results
                 ? 'No items in the selected window.'
                 : 'Fetch to build a digest.'}
             </p>
-          ) : targetItems.length === 0 ? (
+          ) : targetItems.length === 0 && visiblePages.length === 0 && pageReports.length === 0 ? (
             <p className="mt-3 rounded-md border border-[#e3d9c8] bg-[#f5efe3] px-3 py-2 text-sm text-[#4a443a]">
               The fetch succeeded, but no target-source items are in the
               selected window. Topic items supply vocabulary only and are not
               shown here. Widen the lookback or enable more target sources.
             </p>
-          ) : visibleCount === 0 && filterActive ? (
+          ) : visibleCount === 0 && filterActive && visiblePages.length === 0 ? (
             <p className="mt-3 rounded-md border border-[#e3d9c8] bg-[#f5efe3] px-3 py-2 text-sm text-[#4a443a]">
               The fetch succeeded - {targetItems.length} target item
               {targetItems.length === 1 ? '' : 's'} retrieved - but none match
